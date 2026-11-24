@@ -1,0 +1,2539 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daiso Fiscal RTC — Cockpit de Auditoria e Simulação Tributária</title>
+
+  <!-- Fontes Inter (UI) e JetBrains Mono (Códigos Fiscais, NCM, JSON, XML) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- JSZip para leitura direta de lotes compactados (.zip) no navegador -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            daiso: {
+              50: '#fff1f3',
+              100: '#ffe0e6',
+              200: '#fec6d2',
+              500: '#f43f5e',
+              600: '#e11d48',
+              700: '#be123c',
+              900: '#881337',
+            }
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased overflow-x-hidden selection:bg-daiso-100 selection:text-daiso-900">
+
+  <!-- Container de Notificações Toast (Substitui alert/confirm) -->
+  <div id="toast-container" class="fixed top-4 right-4 z-[90] flex flex-col gap-2 max-w-sm w-[calc(100vw-2rem)] pointer-events-none"></div>
+
+  <!-- Backdrop Mobile para Sidebar -->
+  <div id="mobile-backdrop" onclick="toggleMobileSidebar(false)" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden lg:hidden transition-opacity"></div>
+
+  <!-- Wrapper Principal -->
+  <div class="min-h-screen flex flex-col lg:flex-row">
+
+    <!-- ==================== SIDEBAR ==================== -->
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 text-slate-200 flex flex-col transform -translate-x-full lg:translate-x-0 lg:static lg:inset-auto transition-transform duration-200 ease-in-out shrink-0 border-r border-slate-800">
+      <!-- Marca / Identidade -->
+      <div class="p-5 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-daiso-500 to-daiso-700 flex items-center justify-center shadow-lg shadow-daiso-600/30 shrink-0">
+            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="font-extrabold text-white tracking-tight text-base">DAISO</span>
+              <span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-md bg-daiso-600/20 text-daiso-500 border border-daiso-500/30">RTC</span>
+            </div>
+            <p class="text-xs text-slate-400 leading-tight">Cockpit Fiscal Sênior</p>
+          </div>
+        </div>
+        <button onclick="toggleMobileSidebar(false)" class="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800" aria-label="Fechar menu">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Menu de Navegação -->
+      <nav class="flex-1 p-4 space-y-1.5 overflow-y-auto">
+        <p class="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Rotina Fiscal (LC 214/2025)</p>
+
+        <button onclick="switchTab('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+          <span>Dashboard Executivo</span>
+        </button>
+
+        <button onclick="switchTab('auditor')" id="nav-auditor" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"/></svg>
+          <span class="flex-1">Auditor XML (Lote)</span>
+          <span id="badge-divergencias" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 hidden">0</span>
+        </button>
+
+        <button onclick="switchTab('skus')" id="nav-skus" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>
+          <span class="flex-1">Saneamento SKUs & NCM</span>
+          <span id="badge-skus-alert" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300">0</span>
+        </button>
+
+        <button onclick="switchTab('simulador')" id="nav-simulador" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+          <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>Simulador & Transição</span>
+        </button>
+
+        <div class="pt-4 mt-4 border-t border-slate-800">
+          <p class="px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Infraestrutura & Código</p>
+
+          <button onclick="switchTab('api')" id="nav-api" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+            <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"/></svg>
+            <span>API RFB & Governança</span>
+          </button>
+
+          <button onclick="switchTab('github')" id="nav-github" class="nav-btn w-full flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-medium transition-all text-left">
+            <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            <span>Publicar no GitHub</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Card de Status do Motor RFB na Sidebar -->
+      <div class="p-4 border-t border-slate-800 bg-slate-950/60">
+        <div class="flex items-center justify-between mb-1.5">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Motor Tributário</span>
+          <span id="sidebar-engine-dot" class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+            <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            Offline (ADR003)
+          </span>
+        </div>
+        <p id="sidebar-engine-url" class="text-[11px] font-mono text-slate-400 truncate mb-2.5">http://localhost:8080/api/calculadora</p>
+        <button onclick="testApiConnection()" class="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 transition-colors flex items-center justify-center gap-2">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/></svg>
+          Testar API Oficial RFB
+        </button>
+      </div>
+    </aside>
+
+    <!-- ==================== CONTEÚDO PRINCIPAL ==================== -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Top Header -->
+      <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <button onclick="toggleMobileSidebar(true)" class="lg:hidden p-2 rounded-xl text-slate-600 hover:bg-slate-100" aria-label="Abrir menu">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+          </button>
+          <div class="min-w-0">
+            <h1 id="page-title" class="text-lg sm:text-xl font-bold text-slate-900 truncate">Dashboard Executivo</h1>
+            <p id="page-subtitle" class="text-xs sm:text-sm text-slate-500 truncate">Monitoramento CBS, IBS e Imposto Seletivo — Regime Regular (Portaria Cotec nº 342/2026)</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+          <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-medium text-slate-700">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>Regime: <strong class="text-slate-900">Lucro Real (Regular)</strong></span>
+          </div>
+          <button onclick="switchTab('auditor')" class="px-3.5 py-2 rounded-xl bg-daiso-600 hover:bg-daiso-700 text-white text-xs sm:text-sm font-semibold shadow-sm shadow-daiso-600/20 transition-all flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+            <span class="hidden sm:inline">Auditar Lote XML</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Área Dinâmica das Abas -->
+      <main class="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto space-y-6">
+
+        <!-- ==================== ABA 1: DASHBOARD ==================== -->
+        <section id="tab-dashboard" class="tab-section space-y-6">
+
+          <!-- Banner Introdutório / Ação Rápida -->
+          <div class="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-5 sm:p-6 shadow-lg border border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="space-y-1.5 max-w-2xl">
+              <div class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-daiso-600/20 border border-daiso-500/30 text-daiso-200 text-xs font-semibold">
+                <span>Compatível com ReceitaFederal/calculadora-rtc-regime-regular (v1.7.2)</span>
+              </div>
+              <h2 class="text-lg sm:text-xl font-bold tracking-tight">Central de Compliance Tributário — Daiso Brasil</h2>
+              <p class="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                Audite lotes inteiros de XMLs (ou arquivos <code class="font-mono text-daiso-200">.zip</code>) de importação, transferências do CD e cupons NFC-e item a item via <code class="font-mono text-daiso-200">POST /observabilidade/regime-geral</code>, saneie SKUs e simule margens até 2033.
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2.5 shrink-0">
+              <button onclick="switchTab('auditor'); loadDemoBatch();" class="px-4 py-2.5 rounded-xl bg-daiso-600 hover:bg-daiso-500 text-white text-xs sm:text-sm font-semibold shadow-md transition-all">
+                Auditar Lote Demo (3 XMLs)
+              </button>
+              <button onclick="switchTab('github')" class="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-semibold border border-white/15 transition-all">
+                Baixar Kit GitHub
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Notas Auditadas</span>
+                <span class="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>
+                </span>
+              </div>
+              <div id="kpi-notas" class="text-2xl sm:text-3xl font-extrabold text-slate-900">0</div>
+              <p id="kpi-itens-sub" class="text-xs text-slate-500 mt-1">0 itens processados no motor</p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Divergências / Erros</span>
+                <span class="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+                </span>
+              </div>
+              <div id="kpi-divergencias" class="text-2xl sm:text-3xl font-extrabold text-amber-600">0</div>
+              <p class="text-xs text-slate-500 mt-1">Apontados sem abortar o lote</p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">CBS + IBS + IS Apurado</span>
+                <span class="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"/></svg>
+                </span>
+              </div>
+              <div id="kpi-tributos" class="text-2xl sm:text-3xl font-extrabold text-slate-900">R$ 0,00</div>
+              <p class="text-xs text-slate-500 mt-1">Precisão ADR003 (HALF_EVEN)</p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+              <div class="flex items-center justify-between mb-3">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Saúde Cadastro SKUs</span>
+                <span class="p-2 rounded-xl bg-daiso-50 text-daiso-600">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </span>
+              </div>
+              <div id="kpi-saude-sku" class="text-2xl sm:text-3xl font-extrabold text-daiso-600">0%</div>
+              <p id="kpi-saude-sub" class="text-xs text-slate-500 mt-1">0 de 0 SKUs saneados</p>
+            </div>
+          </div>
+
+          <!-- Painéis Analíticos -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Histórico Recente de Auditorias -->
+            <div class="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+              <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h3 class="font-bold text-slate-900">Histórico de Auditorias XML</h3>
+                  <p class="text-xs text-slate-500">Clique em qualquer documento abaixo para abrir o detalhe item a item</p>
+                </div>
+                <button onclick="clearAuditHistory()" class="text-xs font-semibold text-slate-400 hover:text-rose-600 transition-colors">Limpar histórico</button>
+              </div>
+              <div class="overflow-x-auto flex-1">
+                <table class="w-full text-left text-sm">
+                  <thead class="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-100">
+                    <tr>
+                      <th class="px-5 py-3 font-semibold">Documento</th>
+                      <th class="px-4 py-3 font-semibold">UF / Operação</th>
+                      <th class="px-4 py-3 font-semibold text-right">Total Tributos</th>
+                      <th class="px-4 py-3 font-semibold text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dashboard-history-body" class="divide-y divide-slate-100 text-slate-700">
+                    <!-- Preenchido via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Mapa de Riscos por Categoria Daiso -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col justify-between space-y-4">
+              <div>
+                <h3 class="font-bold text-slate-900">Pontos de Atenção — Varejo Importador</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Prioridades de revisão da Reforma Tributária</p>
+              </div>
+              <div class="space-y-3">
+                <div class="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100">
+                  <div class="flex items-center justify-between text-xs font-bold text-rose-800 mb-1">
+                    <span>Imposto Seletivo (IS)</span>
+                    <span class="font-mono">LC 214 Art. 409</span>
+                  </div>
+                  <p class="text-xs text-rose-700/90">Bebidas açucaradas importadas (ex.: Ramune, refrigerantes asiáticos) sofrem incidência adicional de IS na importação e venda.</p>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                  <div class="flex items-center justify-between text-xs font-bold text-amber-800 mb-1">
+                    <span>Alíquota Reduzida / Cesta Básica</span>
+                    <span class="font-mono">cClassTrib</span>
+                  </div>
+                  <p class="text-xs text-amber-700/90">Alimentos e itens de higiene exigem mapeamento rigoroso do código <code class="font-mono">cClassTrib</code> para evitar tributação cheia indevida no PDV.</p>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-100">
+                  <div class="flex items-center justify-between text-xs font-bold text-emerald-800 mb-1">
+                    <span>Arredondamento Bancário</span>
+                    <span class="font-mono">ADR003</span>
+                  </div>
+                  <p class="text-xs text-emerald-700/90">A API oficial usa <code class="font-mono">BigDecimal</code> (8 casas, <code class="font-mono">HALF_EVEN</code>). Diferenças de centavos com o ERP devem ser auditadas por item.</p>
+                </div>
+              </div>
+              <button onclick="switchTab('skus')" class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+                Revisar Matriz de SKUs agora
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABA 2: AUDITOR XML (LOTE & INDIVIDUAL) ==================== -->
+        <section id="tab-auditor" class="tab-section hidden space-y-6">
+
+          <!-- Área de Upload em Lote + Cenários Demo -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Dropzone XML (Suporte a Múltiplos Arquivos, .ZIP e Pasta Completa) -->
+            <div id="xml-dropzone" onclick="document.getElementById('xml-file-input').click()" class="lg:col-span-2 bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-daiso-500 transition-colors p-6 flex flex-col items-center justify-center text-center cursor-pointer relative shadow-sm">
+              <input type="file" id="xml-file-input" accept=".xml,.zip" multiple class="hidden" onchange="handleXmlFileSelect(event)" />
+              <input type="file" id="xml-folder-input" webkitdirectory directory multiple class="hidden" onchange="handleXmlFolderSelect(event)" />
+              <div class="w-12 h-12 rounded-2xl bg-daiso-50 text-daiso-600 flex items-center justify-center mb-3">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l3 3m-3-3l-3 3M6.75 19.5a4.5 4.5 0 01-1.41-8.775 5.25 5.25 0 0110.233-2.33 3 3 0 013.758 3.848A3.752 3.752 0 0118 19.5H6.75z"/></svg>
+              </div>
+              <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-daiso-50 text-daiso-700 text-[11px] font-bold mb-1.5">
+                <span>Auditoria Individual, em Lote (.xml) ou Compactado (.zip)</span>
+              </div>
+              <h3 class="font-bold text-slate-900 text-base">Arraste 1 ou dezenas de XMLs / ZIP de uma só vez</h3>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1 max-w-lg">
+                Processamento 100% local no navegador. O motor extrai todos os itens <code class="font-mono text-slate-700">&lt;det&gt;</code>, audita via <code class="font-mono text-daiso-600">/observabilidade/regime-geral</code> e consolida divergências em um único relatório.
+              </p>
+              <div class="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+                <button type="button" onclick="event.stopPropagation(); document.getElementById('xml-file-input').click();" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+                  Selecionar XMLs ou ZIP (Lote)
+                </button>
+                <button type="button" onclick="event.stopPropagation(); document.getElementById('xml-folder-input').click();" class="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 text-xs font-semibold transition-colors flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/></svg>
+                  Selecionar Pasta Inteira
+                </button>
+              </div>
+            </div>
+
+            <!-- Cenários de Demonstração Realistas -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between space-y-3 shadow-sm">
+              <div>
+                <h3 class="font-bold text-slate-900 text-sm">XMLs de Teste (Cenários Daiso)</h3>
+                <p class="text-xs text-slate-500 mt-0.5">Teste uma nota individual ou o lote completo de uma vez:</p>
+              </div>
+              <div class="space-y-2">
+                <button onclick="loadDemoBatch()" class="w-full p-3 rounded-xl bg-gradient-to-r from-daiso-600 to-daiso-700 hover:from-daiso-500 hover:to-daiso-600 text-white text-left transition-all shadow-sm">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold">Auditar Lote Completo (3 XMLs)</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/20 text-white">LOTE</span>
+                  </div>
+                  <p class="text-[11px] text-daiso-100 mt-0.5">Importação + Transferência SP→RJ + NFC-e PDV juntos</p>
+                </button>
+
+                <button onclick="loadDemoScenario('importacao')" class="w-full p-2.5 rounded-xl border border-slate-200 hover:border-daiso-500 hover:bg-daiso-50/40 text-left transition-all group">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-800 group-hover:text-daiso-700">1. NF-e Importação (CFOP 3102)</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">CD SP</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500 mt-0.5">5 itens + Imposto Seletivo + erro REG-011</p>
+                </button>
+
+                <button onclick="loadDemoScenario('transferencia')" class="w-full p-2.5 rounded-xl border border-slate-200 hover:border-daiso-500 hover:bg-daiso-50/40 text-left transition-all group">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-800 group-hover:text-daiso-700">2. Transferência CD → Filial (6152)</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">SP → RJ</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Operação interestadual com CST divergente</p>
+                </button>
+
+                <button onclick="loadDemoScenario('nfce')" class="w-full p-2.5 rounded-xl border border-slate-200 hover:border-daiso-500 hover:bg-daiso-50/40 text-left transition-all group">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-slate-800 group-hover:text-daiso-700">3. NFC-e Varejo PDV (CFOP 5102)</span>
+                    <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">Mod. 65</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500 mt-0.5">Cupom com Cesta Básica (0%) e itens normais</p>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Progresso do Processamento em Lote -->
+          <div id="batch-progress-container" class="hidden bg-white rounded-2xl border border-slate-200 p-4 shadow-sm space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
+              <span id="batch-progress-label">Processando lote de XMLs...</span>
+              <span id="batch-progress-pct" class="font-mono text-daiso-600">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div id="batch-progress-bar" class="h-full bg-gradient-to-r from-daiso-500 to-daiso-600 rounded-full transition-all duration-150" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Painel Consolidado do Lote (Exibido quando 2+ XMLs são auditados juntos) -->
+          <div id="batch-summary-container" class="hidden bg-white rounded-2xl border-2 border-slate-900/10 shadow-sm overflow-hidden">
+            <div class="p-5 bg-slate-900 text-white flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-0.5 rounded-md bg-daiso-600 text-[11px] font-bold uppercase">Lote Consolidado</span>
+                  <h3 id="batch-title" class="font-bold text-base">0 documentos processados</h3>
+                </div>
+                <p id="batch-subtitle" class="text-xs text-slate-300 mt-1">Clique em qualquer nota da tabela abaixo para inspecionar os itens e a memória de cálculo.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button onclick="exportBatchCsv(false)" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                  Exportar Lote Completo (CSV)
+                </button>
+                <button onclick="exportBatchCsv(true)" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-colors flex items-center gap-1.5">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+                  Exportar Só Divergências (CSV)
+                </button>
+                <button onclick="closeBatchSummary()" class="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors">
+                  Fechar Lote
+                </button>
+              </div>
+            </div>
+
+            <!-- KPIs Consolidados do Lote -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 p-4 bg-slate-50 border-b border-slate-200">
+              <div class="p-3 rounded-xl bg-white border border-slate-200">
+                <span class="text-[11px] font-medium text-slate-500 block">XMLs no Lote</span>
+                <span id="batch-kpi-docs" class="text-sm sm:text-base font-bold font-mono text-slate-900">0</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-slate-200">
+                <span class="text-[11px] font-medium text-slate-500 block">Total de Itens</span>
+                <span id="batch-kpi-items" class="text-sm sm:text-base font-bold font-mono text-slate-900">0</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-blue-100">
+                <span class="text-[11px] font-medium text-blue-700 block">CBS Consolidada</span>
+                <span id="batch-kpi-cbs" class="text-sm sm:text-base font-bold font-mono text-blue-900">R$ 0,00</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-indigo-100">
+                <span class="text-[11px] font-medium text-indigo-700 block">IBS Consolidado</span>
+                <span id="batch-kpi-ibs" class="text-sm sm:text-base font-bold font-mono text-indigo-900">R$ 0,00</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-rose-100">
+                <span class="text-[11px] font-medium text-rose-700 block">Imposto Seletivo</span>
+                <span id="batch-kpi-is" class="text-sm sm:text-base font-bold font-mono text-rose-900">R$ 0,00</span>
+              </div>
+              <div class="p-3 rounded-xl bg-white border border-amber-200">
+                <span class="text-[11px] font-medium text-amber-700 block">Notas c/ Alerta</span>
+                <span id="batch-kpi-err" class="text-sm sm:text-base font-bold font-mono text-amber-800">0</span>
+              </div>
+            </div>
+
+            <!-- Filtros e Lista de Notas do Lote -->
+            <div class="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+              <div class="flex flex-wrap gap-1.5">
+                <button onclick="setBatchFilter('ALL')" id="batch-filter-ALL" class="batch-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white">Todas</button>
+                <button onclick="setBatchFilter('ERRORS')" id="batch-filter-ERRORS" class="batch-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-amber-100">Somente com Erros / Alertas</button>
+                <button onclick="setBatchFilter('OK')" id="batch-filter-OK" class="batch-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-emerald-100">100% Conformes</button>
+              </div>
+              <span id="batch-failed-info" class="text-xs font-semibold text-rose-600 hidden"></span>
+            </div>
+
+            <div class="overflow-x-auto max-h-72 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-[11px] uppercase text-slate-500 border-b border-slate-200 sticky top-0">
+                  <tr>
+                    <th class="px-4 py-2.5 font-semibold">Documento / Arquivo</th>
+                    <th class="px-3 py-2.5 font-semibold">Rota / Operação</th>
+                    <th class="px-3 py-2.5 font-semibold text-center">Itens</th>
+                    <th class="px-3 py-2.5 font-semibold text-right">Base Total</th>
+                    <th class="px-3 py-2.5 font-semibold text-right">CBS + IBS + IS</th>
+                    <th class="px-3 py-2.5 font-semibold text-center">Status Lote</th>
+                    <th class="px-4 py-2.5 font-semibold text-right">Detalhar</th>
+                  </tr>
+                </thead>
+                <tbody id="batch-docs-tbody" class="divide-y divide-slate-100">
+                  <!-- Preenchido via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Resultado da Auditoria Ativa -->
+          <div id="audit-result-container" class="hidden space-y-5">
+            <!-- Cabeçalho da Nota Auditada -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span id="audit-doc-badge" class="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-900 text-white">NF-e 55</span>
+                    <h3 id="audit-doc-title" class="font-bold text-slate-900 text-base">Nota Fiscal nº 000000</h3>
+                    <span id="audit-engine-badge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Simulação Local ADR003</span>
+                  </div>
+                  <p id="audit-doc-meta" class="text-xs font-mono text-slate-500 mt-1.5 break-all">Chave: —</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <select id="audit-year-select" onchange="recalculateCurrentAudit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-daiso-500">
+                    <option value="2026">Ano-Base 2026 (Teste: CBS 0,9% / IBS 0,1%)</option>
+                    <option value="2027">Ano-Base 2027 (CBS Plena 8,8% / IBS 0,1%)</option>
+                    <option value="2030">Ano-Base 2030 (Transição IBS 20%)</option>
+                    <option value="2033" selected>Ano-Base 2033 (Reforma Plena: CBS 8,8% / IBS 17,7%)</option>
+                  </select>
+                  <button onclick="exportAuditCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                    Exportar CSV
+                  </button>
+                  <button onclick="openXmlGroupModal()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+                    Gerar Grupo XML &lt;IBSCBS&gt;
+                  </button>
+                </div>
+              </div>
+
+              <!-- Resumo Financeiro da Nota -->
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-4">
+                <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span class="text-[11px] font-medium text-slate-500 block">Base Unificada</span>
+                  <span id="sum-base" class="text-sm sm:text-base font-bold font-mono text-slate-900">R$ 0,00</span>
+                </div>
+                <div class="p-3 rounded-xl bg-blue-50/60 border border-blue-100">
+                  <span class="text-[11px] font-medium text-blue-700 block">CBS (União)</span>
+                  <span id="sum-cbs" class="text-sm sm:text-base font-bold font-mono text-blue-900">R$ 0,00</span>
+                </div>
+                <div class="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                  <span class="text-[11px] font-medium text-indigo-700 block">IBS UF + Mun</span>
+                  <span id="sum-ibs" class="text-sm sm:text-base font-bold font-mono text-indigo-900">R$ 0,00</span>
+                </div>
+                <div class="p-3 rounded-xl bg-rose-50/60 border border-rose-100">
+                  <span class="text-[11px] font-medium text-rose-700 block">Imposto Seletivo</span>
+                  <span id="sum-is" class="text-sm sm:text-base font-bold font-mono text-rose-900">R$ 0,00</span>
+                </div>
+                <div class="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100">
+                  <span class="text-[11px] font-medium text-emerald-700 block">Itens Calculados</span>
+                  <span id="sum-ok" class="text-sm sm:text-base font-bold font-mono text-emerald-800">0 / 0</span>
+                </div>
+                <div class="p-3 rounded-xl bg-amber-50/60 border border-amber-100">
+                  <span class="text-[11px] font-medium text-amber-700 block">Divergência / Erros</span>
+                  <span id="sum-err" class="text-sm sm:text-base font-bold font-mono text-amber-800">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabela de Itens Auditados (Observabilidade item a item) -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div class="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 class="font-bold text-slate-900 text-sm">Auditoria Item a Item (Observabilidade RTC)</h4>
+                <span class="text-xs text-slate-500">Clique em <strong>Memória</strong> para ver fundamentação legal, JSON Pointer e detalhes do cálculo.</span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm">
+                  <thead class="bg-slate-50 text-[11px] uppercase text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th class="px-4 py-3 font-semibold">#</th>
+                      <th class="px-4 py-3 font-semibold">SKU / Produto</th>
+                      <th class="px-3 py-3 font-semibold">NCM / CST / cClass</th>
+                      <th class="px-3 py-3 font-semibold text-right">Base (R$)</th>
+                      <th class="px-3 py-3 font-semibold text-right">CBS</th>
+                      <th class="px-3 py-3 font-semibold text-right">IBS (UF+Mun)</th>
+                      <th class="px-3 py-3 font-semibold text-right">IS</th>
+                      <th class="px-3 py-3 font-semibold text-center">Estado (Observ.)</th>
+                      <th class="px-4 py-3 font-semibold text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody id="audit-items-tbody" class="divide-y divide-slate-100">
+                    <!-- Preenchido via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABA 3: SANEAMENTO SKUS & NCM ==================== -->
+        <section id="tab-skus" class="tab-section hidden space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <h2 class="font-bold text-slate-900 text-base">Matriz Fiscal de SKUs — Saneamento Pré-Emissão</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Valide NCM, CST e <code class="font-mono">cClassTrib</code> contra as tabelas da LC 214/2025 antes de atualizar o ERP/PDV.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer transition-colors">
+                  Importar CSV
+                  <input type="file" accept=".csv,.txt" class="hidden" onchange="importSkusCsv(event)" />
+                </label>
+                <button onclick="downloadSkuTemplate()" class="px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors">
+                  Modelo CSV
+                </button>
+                <button onclick="validateAllSkus()" class="px-3.5 py-2 rounded-xl bg-daiso-600 hover:bg-daiso-700 text-white text-xs font-semibold transition-colors">
+                  Validar Lote
+                </button>
+                <button onclick="autoFixDivergentCsts()" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold transition-colors">
+                  Corrigir CSTs em Lote
+                </button>
+                <button onclick="exportSkusCsv()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors">
+                  Exportar Saneado
+                </button>
+              </div>
+            </div>
+
+            <!-- Filtros e Busca -->
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="relative flex-1">
+                <input id="sku-search" oninput="renderSkuTable()" type="text" placeholder="Buscar por código SKU, descrição ou NCM..." class="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-daiso-500" />
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+              </div>
+              <select id="sku-filter-status" onchange="renderSkuTable()" class="px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-daiso-500">
+                <option value="ALL">Todos os status</option>
+                <option value="OK">Conformes (OK)</option>
+                <option value="ALERTA_IS">Incidência Imposto Seletivo</option>
+                <option value="REVISAR">Revisar cClassTrib / NCM</option>
+              </select>
+              <button onclick="openAddSkuModal()" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors shrink-0">
+                + Novo SKU
+              </button>
+            </div>
+          </div>
+
+          <!-- Tabela Editável de SKUs -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs sm:text-sm">
+                <thead class="bg-slate-50 text-[11px] uppercase text-slate-500 border-b border-slate-200">
+                  <tr>
+                    <th class="px-4 py-3 font-semibold">SKU</th>
+                    <th class="px-4 py-3 font-semibold">Descrição / Categoria</th>
+                    <th class="px-3 py-3 font-semibold">NCM (8 dígitos)</th>
+                    <th class="px-3 py-3 font-semibold">CST RTC</th>
+                    <th class="px-3 py-3 font-semibold">cClassTrib</th>
+                    <th class="px-3 py-3 font-semibold">Regra Tributária</th>
+                    <th class="px-3 py-3 font-semibold text-center">Diagnóstico</th>
+                    <th class="px-4 py-3 font-semibold text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody id="sku-tbody" class="divide-y divide-slate-100">
+                  <!-- Preenchido via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABA 4: SIMULADOR DE PRECIFICAÇÃO & TRANSIÇÃO ==================== -->
+        <section id="tab-simulador" class="tab-section hidden space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Formulário de Parâmetros -->
+            <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+              <div>
+                <h2 class="font-bold text-slate-900 text-base">Simulador de Importação & Preço Daiso</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Compare a carga efetiva do Sistema Atual vs. Reforma Tributária com aproveitamento integral de créditos.</p>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Custo Landed / Importação (R$)</label>
+                  <input id="sim-custo" type="number" step="0.01" value="5.40" oninput="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-sm focus:ring-2 focus:ring-daiso-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Preço de Venda PDV (R$)</label>
+                  <input id="sim-preco" type="number" step="0.01" value="12.99" oninput="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-sm focus:ring-2 focus:ring-daiso-500 focus:outline-none" />
+                </div>
+              </div>
+
+              <!-- Atalhos de Faixas de Preço Daiso -->
+              <div>
+                <span class="block text-[11px] font-semibold text-slate-500 mb-1.5">Faixas de Preço Rápidas (PDV):</span>
+                <div class="flex flex-wrap gap-1.5">
+                  <button onclick="setSimPrice(9.99)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-daiso-100 hover:text-daiso-700 text-xs font-mono font-semibold transition-colors">R$ 9,99</button>
+                  <button onclick="setSimPrice(12.99)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-daiso-100 hover:text-daiso-700 text-xs font-mono font-semibold transition-colors">R$ 12,99</button>
+                  <button onclick="setSimPrice(15.99)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-daiso-100 hover:text-daiso-700 text-xs font-mono font-semibold transition-colors">R$ 15,99</button>
+                  <button onclick="setSimPrice(19.99)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-daiso-100 hover:text-daiso-700 text-xs font-mono font-semibold transition-colors">R$ 19,99</button>
+                  <button onclick="setSimPrice(29.99)" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-daiso-100 hover:text-daiso-700 text-xs font-mono font-semibold transition-colors">R$ 29,99</button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">UF da Loja (Destino)</label>
+                  <select id="sim-uf" onchange="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-daiso-500 focus:outline-none">
+                    <option value="SP" selected>SP — São Paulo (ICMS 18%)</option>
+                    <option value="RJ">RJ — Rio de Janeiro (ICMS 22%)</option>
+                    <option value="PR">PR — Paraná (ICMS 19.5%)</option>
+                    <option value="MG">MG — Minas Gerais (ICMS 18%)</option>
+                    <option value="RS">RS — Rio Grande do Sul (ICMS 17%)</option>
+                    <option value="DF">DF — Distrito Federal (ICMS 20%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Ano da Transição</label>
+                  <select id="sim-ano" onchange="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-daiso-500 focus:outline-none">
+                    <option value="2026">2026 (Alíquota Teste)</option>
+                    <option value="2027">2027 (CBS Plena / Extinção PIS-COFINS)</option>
+                    <option value="2029">2029 (10% IBS / 90% ICMS)</option>
+                    <option value="2030">2030 (20% IBS / 80% ICMS)</option>
+                    <option value="2031">2031 (30% IBS / 70% ICMS)</option>
+                    <option value="2032">2032 (40% IBS / 60% ICMS)</option>
+                    <option value="2033" selected>2033 (Reforma Plena — 100% IVA Dual)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Tratamento Tributário (cClassTrib)</label>
+                <select id="sim-regime-item" onchange="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-daiso-500 focus:outline-none">
+                  <option value="PADRAO" selected>Tributação Padrão (Utilidades, Papelaria, Decoração)</option>
+                  <option value="REDUCAO_60">Alíquota Reduzida 60% (Higiene/Alimentos selecionados)</option>
+                  <option value="CESTA_ZERO">Cesta Básica Nacional — Alíquota Zero (0%)</option>
+                  <option value="SELETIVO">Bebida Açucarada — Padrão + Imposto Seletivo (+12%)</option>
+                </select>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3.5 pt-2 border-t border-slate-100">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Crédito Legado (% custo)</label>
+                  <input id="sim-cred-legado" type="number" value="27.25" step="0.25" oninput="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-sm" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Desp. Operacionais (%)</label>
+                  <input id="sim-despesas" type="number" value="18" step="0.5" oninput="runPricingSimulation()" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Resultados Comparativos -->
+            <div class="lg:col-span-7 space-y-5">
+              <!-- Comparação Lado a Lado -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                  <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Cenário Legado (Atual)</span>
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">Por Dentro</span>
+                  </div>
+                  <div class="space-y-2 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">ICMS + PIS/COFINS Débito:</span><span id="res-leg-debito" class="font-mono font-semibold text-slate-800">R$ 0,00</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Créditos na Importação:</span><span id="res-leg-credito" class="font-mono font-semibold text-emerald-600">- R$ 0,00</span></div>
+                    <div class="flex justify-between pt-2 border-t border-slate-100 text-sm"><span class="font-semibold text-slate-700">Tributo Líquido:</span><span id="res-leg-liq" class="font-mono font-bold text-slate-900">R$ 0,00</span></div>
+                    <div class="flex justify-between pt-1"><span class="font-semibold text-slate-700">Margem Líquida:</span><span id="res-leg-margem" class="font-mono font-extrabold text-base text-slate-900">0,0%</span></div>
+                  </div>
+                </div>
+
+                <div class="bg-white rounded-2xl border-2 border-daiso-500/40 p-5 shadow-sm relative overflow-hidden">
+                  <div class="flex items-center justify-between mb-3">
+                    <span id="res-rtc-title" class="text-xs font-bold uppercase tracking-wider text-daiso-700">Reforma Tributária (2033)</span>
+                    <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-daiso-50 text-daiso-700">Por Fora</span>
+                  </div>
+                  <div class="space-y-2 text-xs">
+                    <div class="flex justify-between"><span class="text-slate-500">CBS + IBS + IS Débito:</span><span id="res-rtc-debito" class="font-mono font-semibold text-slate-800">R$ 0,00</span></div>
+                    <div class="flex justify-between"><span class="text-slate-500">Crédito Pleno (CBS/IBS):</span><span id="res-rtc-credito" class="font-mono font-semibold text-emerald-600">- R$ 0,00</span></div>
+                    <div class="flex justify-between pt-2 border-t border-slate-100 text-sm"><span class="font-semibold text-slate-700">Tributo Líquido:</span><span id="res-rtc-liq" class="font-mono font-bold text-daiso-700">R$ 0,00</span></div>
+                    <div class="flex justify-between pt-1"><span class="font-semibold text-slate-700">Margem Líquida:</span><span id="res-rtc-margem" class="font-mono font-extrabold text-base text-daiso-700">0,0%</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Veredito Executivo -->
+              <div id="sim-verdict-box" class="rounded-2xl p-4 border flex items-start gap-3">
+                <!-- Preenchido via JS -->
+              </div>
+
+              <!-- Curva de Transição 2026 -> 2033 -->
+              <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 class="font-bold text-slate-900 text-sm">Evolução da Margem Líquida na Transição (2026–2033)</h3>
+                    <p class="text-xs text-slate-500">Impacto ano a ano mantendo o preço fixo de venda no PDV</p>
+                  </div>
+                </div>
+                <div id="transition-bars" class="grid grid-cols-7 gap-2 items-end h-44 pt-4">
+                  <!-- Barras geradas via JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABA 5: API RFB & GOVERNANÇA ==================== -->
+        <section id="tab-api" class="tab-section hidden space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Configuração da Conexão -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+              <div>
+                <h2 class="font-bold text-slate-900 text-base">Conexão com a API Oficial da Receita Federal</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Configure o servidor local ou interno do repositório <code class="font-mono">ReceitaFederal/calculadora-rtc-regime-regular</code>.</p>
+              </div>
+
+              <div class="space-y-3">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Base URL da API (Java 25 / Spring Boot 4)</label>
+                  <input id="api-base-url" type="text" value="http://localhost:8080/api/calculadora" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs sm:text-sm focus:ring-2 focus:ring-daiso-500 focus:outline-none" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Modo de Operação do Motor</label>
+                  <select id="api-mode" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-daiso-500 focus:outline-none">
+                    <option value="AUTO" selected>Automático (Tenta API Oficial RFB; se offline, usa Motor Local ADR003)</option>
+                    <option value="API_ONLY">Somente API Oficial RFB (Exige servidor rodando com CORS liberado)</option>
+                    <option value="OFFLINE">Somente Motor Local Offline (ADR003 HALF_EVEN)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1">Hash SHA-256 / Release Homologada (Portaria Cotec nº 342/2026)</label>
+                  <input id="api-release-hash" type="text" value="v1.7.2-offline | sha256: homologacao-daiso-2026-11" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 font-mono text-xs bg-slate-50 text-slate-700" />
+                </div>
+              </div>
+
+              <div class="flex flex-wrap gap-2.5 pt-2">
+                <button onclick="saveApiSettings()" class="px-4 py-2.5 rounded-xl bg-daiso-600 hover:bg-daiso-700 text-white text-xs font-semibold transition-colors">
+                  Salvar Configurações
+                </button>
+                <button onclick="testApiConnection()" class="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors">
+                  Testar Conexão Agora
+                </button>
+              </div>
+
+              <!-- Aviso Técnico de CORS -->
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 space-y-1">
+                <p class="font-bold text-slate-800">Dica para ambiente corporativo (CORS):</p>
+                <p>Ao rodar este Cockpit via GitHub Pages ou arquivo local conectando em <code class="font-mono">localhost:8080</code>, suba a calculadora via Docker Compose + proxy reverso (incluído na aba GitHub) para evitar bloqueios de CORS no navegador.</p>
+              </div>
+            </div>
+
+            <!-- Playground JSON Oficial -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm flex flex-col space-y-3">
+              <div class="flex items-center justify-between gap-2">
+                <div>
+                  <h2 class="font-bold text-slate-900 text-base">Playground — Observabilidade RFB</h2>
+                  <p class="text-xs text-slate-500">Payload compatível com <code class="font-mono">POST /observabilidade/regime-geral</code></p>
+                </div>
+                <button onclick="runPlaygroundTest()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shrink-0">
+                  Executar POST
+                </button>
+              </div>
+
+              <textarea id="playground-input" rows="10" class="w-full p-3 rounded-xl bg-slate-900 text-emerald-300 font-mono text-xs leading-relaxed focus:outline-none focus:ring-2 focus:ring-daiso-500"></textarea>
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="text-xs font-semibold text-slate-600">Resposta (HTTP 200 com estadoItem & memoriaCalculo):</span>
+                  <button onclick="copyTextFromId('playground-output')" class="text-xs font-semibold text-daiso-600 hover:underline">Copiar JSON</button>
+                </div>
+                <pre id="playground-output" class="p-3 rounded-xl bg-slate-950 text-slate-200 font-mono text-[11px] max-h-48 overflow-auto">Clique em "Executar POST" para testar o payload...</pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabela de Endpoints Oficiais Mapeados -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-5 border-b border-slate-100">
+              <h3 class="font-bold text-slate-900 text-sm">Endpoints Oficiais Mapeados (ReceitaFederal/calculadora-rtc-regime-regular)</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-500 uppercase border-b border-slate-100">
+                  <tr>
+                    <th class="px-5 py-3">Método</th>
+                    <th class="px-4 py-3">Endpoint</th>
+                    <th class="px-4 py-3">Uso no Cockpit Fiscal Daiso</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 font-mono">
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">POST</span></td><td class="px-4 py-3 text-slate-800">/observabilidade/regime-geral</td><td class="px-4 py-3 font-sans text-slate-600">Auditoria de NF-e/NFC-e em lote sem derrubar a nota quando 1 item falha.</td></tr>
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">POST</span></td><td class="px-4 py-3 text-slate-800">/base-calculo/base-calculo-unificada</td><td class="px-4 py-3 font-sans text-slate-600">Validação da base unificada (valor produto + frete + seguro + despesas - descontos).</td></tr>
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">POST</span></td><td class="px-4 py-3 text-slate-800">/xml/generate?tipo=nfe</td><td class="px-4 py-3 font-sans text-slate-600">Geração do trecho XML oficial de tributação (&lt;IBSCBS&gt;) para conferência com o ERP.</td></tr>
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold">POST</span></td><td class="px-4 py-3 text-slate-800">/xml/validate?tipo=nfe&amp;subtipo=grupo</td><td class="px-4 py-3 font-sans text-slate-600">Validação contra o schema XSD oficial antes da autorização na SEFAZ.</td></tr>
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">GET</span></td><td class="px-4 py-3 text-slate-800">/dados-abertos/...</td><td class="px-4 py-3 font-sans text-slate-600">Consulta de tabelas oficiais de NCM, CST, cClassTrib, alíquotas UF/Mun e fundamentação legal.</td></tr>
+                  <tr><td class="px-5 py-3"><span class="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold">GET</span></td><td class="px-4 py-3 text-slate-800">/observabilidade/erros?codigo=REG-011</td><td class="px-4 py-3 font-sans text-slate-600">Dicionário oficial de erros de entrada e inconsistências estruturais.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================== ABA 6: PUBLICAR NO GITHUB ==================== -->
+        <section id="tab-github" class="tab-section hidden space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-sm space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h2 class="font-bold text-slate-900 text-lg">Kit Completo para Publicação no seu GitHub</h2>
+                <p class="text-xs sm:text-sm text-slate-500 mt-0.5">Baixe ou copie os arquivos abaixo para criar um repositório profissional com <strong>GitHub Pages</strong> e <strong>Docker Compose</strong> pronto para rodar com a API da Receita Federal.</p>
+              </div>
+              <button onclick="downloadCurrentHtml()" class="px-4 py-2.5 rounded-xl bg-daiso-600 hover:bg-daiso-700 text-white text-xs sm:text-sm font-semibold shadow-sm transition-colors flex items-center gap-2 shrink-0">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                Baixar index.html
+              </button>
+            </div>
+
+            <!-- Passo a Passo Rápido -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[11px] font-bold text-daiso-600 uppercase">Passo 1</span>
+                <p class="text-xs font-bold text-slate-900 mt-0.5">Crie o repositório</p>
+                <p class="text-[11px] text-slate-600 mt-1">No GitHub, crie um novo repo (ex.: <code class="font-mono">daiso-cockpit-fiscal-rtc</code>).</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[11px] font-bold text-daiso-600 uppercase">Passo 2</span>
+                <p class="text-xs font-bold text-slate-900 mt-0.5">Suba os 4 arquivos</p>
+                <p class="text-[11px] text-slate-600 mt-1">Envie <code class="font-mono">index.html</code>, <code class="font-mono">README.md</code>, <code class="font-mono">docker-compose.yml</code> e <code class="font-mono">LICENSE</code>.</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[11px] font-bold text-daiso-600 uppercase">Passo 3</span>
+                <p class="text-xs font-bold text-slate-900 mt-0.5">Ative o GitHub Pages</p>
+                <p class="text-[11px] text-slate-600 mt-1">Em <em>Settings → Pages → Branch: main</em>. O sistema fica online em segundos!</p>
+              </div>
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                <span class="text-[11px] font-bold text-daiso-600 uppercase">Passo 4</span>
+                <p class="text-xs font-bold text-slate-900 mt-0.5">Pluge a API da RFB</p>
+                <p class="text-[11px] text-slate-600 mt-1">Quando quiser modo oficial, rode <code class="font-mono">docker compose up -d</code> na rede interna.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Arquivos Gerados para Copiar / Baixar -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- README.md -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-sm font-bold text-slate-900">README.md</span>
+                <div class="flex gap-2">
+                  <button onclick="copyTextFromId('gh-readme')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700">Copiar</button>
+                  <button onclick="downloadTextFile('README.md', document.getElementById('gh-readme').textContent)" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-white">Baixar</button>
+                </div>
+              </div>
+              <pre id="gh-readme" class="p-3.5 rounded-xl bg-slate-950 text-slate-200 font-mono text-[11px] max-h-72 overflow-auto leading-relaxed"></pre>
+            </div>
+
+            <!-- docker-compose.yml -->
+            <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm flex flex-col space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-mono text-sm font-bold text-slate-900">docker-compose.yml + LICENSE (MIT)</span>
+                <div class="flex gap-2">
+                  <button onclick="copyTextFromId('gh-docker')" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700">Copiar Compose</button>
+                  <button onclick="downloadTextFile('docker-compose.yml', document.getElementById('gh-docker').textContent)" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-white">Baixar Compose</button>
+                  <button onclick="downloadMitLicense()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold text-white">Baixar LICENSE</button>
+                </div>
+              </div>
+              <pre id="gh-docker" class="p-3.5 rounded-xl bg-slate-950 text-amber-200 font-mono text-[11px] max-h-72 overflow-auto leading-relaxed"></pre>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: MEMÓRIA DE CÁLCULO & DETALHES ==================== -->
+  <div id="modal-backdrop" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[70] hidden flex items-center justify-center p-4" onclick="if(event.target===this) closeModal()">
+    <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="p-5 border-b border-slate-100 flex items-center justify-between gap-4">
+        <div>
+          <h3 id="modal-title" class="font-bold text-slate-900 text-base">Memória de Cálculo</h3>
+          <p id="modal-subtitle" class="text-xs text-slate-500 font-mono mt-0.5"></p>
+        </div>
+        <button onclick="closeModal()" class="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100" aria-label="Fechar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="modal-body" class="p-5 overflow-y-auto space-y-4 text-sm">
+        <!-- Conteúdo dinâmico -->
+      </div>
+      <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+        <button onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== JAVASCRIPT DA APLICAÇÃO ==================== -->
+  <script>
+    /*************************************************************************
+     * 1. ESTADO GLOBAL E CONSTANTES FISCAIS (LC Nº 214/2025 + ADR003 RFB)
+     *************************************************************************/
+    const STORAGE_KEYS = {
+      CONFIG: 'daiso_rtc_api_config_v2',
+      SKUS: 'daiso_rtc_skus_v2',
+      HISTORY: 'daiso_rtc_audit_history_v2',
+    };
+
+    // Cronograma Oficial Simplificado de Transição (Alíquotas de Referência Estimadas)
+    const TRANSITION_RATES = {
+      2026: { cbs: 0.009, ibsUf: 0.0005, ibsMun: 0.0005, icmsFactor: 1.0, pisCofinsFactor: 1.0, label: 'Teste 2026' },
+      2027: { cbs: 0.088, ibsUf: 0.0005, ibsMun: 0.0005, icmsFactor: 1.0, pisCofinsFactor: 0.0, label: 'CBS Plena' },
+      2029: { cbs: 0.088, ibsUf: 0.0115, ibsMun: 0.0062, icmsFactor: 0.9, pisCofinsFactor: 0.0, label: '10% IBS' },
+      2030: { cbs: 0.088, ibsUf: 0.0230, ibsMun: 0.0124, icmsFactor: 0.8, pisCofinsFactor: 0.0, label: '20% IBS' },
+      2031: { cbs: 0.088, ibsUf: 0.0345, ibsMun: 0.0186, icmsFactor: 0.7, pisCofinsFactor: 0.0, label: '30% IBS' },
+      2032: { cbs: 0.088, ibsUf: 0.0460, ibsMun: 0.0248, icmsFactor: 0.6, pisCofinsFactor: 0.0, label: '40% IBS' },
+      2033: { cbs: 0.088, ibsUf: 0.1150, ibsMun: 0.0620, icmsFactor: 0.0, pisCofinsFactor: 0.0, label: 'Pleno 2033' },
+    };
+
+    // Alíquotas ICMS internas referenciais por UF (para comparativo legado)
+    const UF_ICMS = { SP: 0.18, RJ: 0.22, PR: 0.195, MG: 0.18, RS: 0.17, DF: 0.20 };
+
+    // Tabela de Regras de Classificação Tributária (cClassTrib)
+    const CCLASS_RULES = {
+      '000001': { nome: 'Tributação Integral (Regime Geral)', reducao: 0, isRate: 0, cstEsperado: '000', lei: 'LC 214/2025, Art. 14 — Regra geral de incidência plena de CBS e IBS.' },
+      '200001': { nome: 'Cesta Básica Nacional (Alíquota Zero)', reducao: 1.0, isRate: 0, cstEsperado: '200', lei: 'LC 214/2025, Art. 125 e Anexo I — Alíquota reduzida a 0%.' },
+      '200030': { nome: 'Alimentos / Higiene (Redução 60%)', reducao: 0.6, isRate: 0, cstEsperado: '200', lei: 'LC 214/2025, Art. 135 — Redução de 60% nas alíquotas de CBS e IBS.' },
+      '000099': { nome: 'Bebida Açucarada (Incidência IS)', reducao: 0, isRate: 0.12, cstEsperado: '000', lei: 'LC 214/2025, Art. 409 — Incidência cumulativa de Imposto Seletivo (IS) sobre bebidas açucaradas.' },
+    };
+
+    // Base inicial realista de SKUs da Daiso Brasil
+    const DEFAULT_SKUS = [
+      { sku: 'DAI-4549131', desc: 'Caneta Gel Japonesa 0.5mm Preta', cat: 'Papelaria', ncm: '96081000', cst: '000', cClassTrib: '000001', preco: 9.99 },
+      { sku: 'DAI-4550480', desc: 'Pote Hermético Organizador 1.2L', cat: 'Utilidades', ncm: '39241000', cst: '000', cClassTrib: '000001', preco: 12.99 },
+      { sku: 'DAI-4979909', desc: 'Tigela Cerâmica Estilo Ramen 600ml', cat: 'Mesa Posta', ncm: '69120000', cst: '000', cClassTrib: '000001', preco: 19.99 },
+      { sku: 'DAI-4901777', desc: 'Refrigerante Japonês Ramune Original 200ml', cat: 'Bebidas', ncm: '22021000', cst: '000', cClassTrib: '000099', preco: 15.99 },
+      { sku: 'DAI-4549892', desc: 'Esponja Mágica Melamina (Kit 8 un)', cat: 'Limpeza', ncm: '39211390', cst: '000', cClassTrib: '000001', preco: 9.99 },
+      { sku: 'DAI-4902102', desc: 'Arroz Japonês Grão Curto 1kg', cat: 'Alimentos', ncm: '10063021', cst: '200', cClassTrib: '200001', preco: 19.99 },
+      { sku: 'DAI-4549138', desc: 'Máscara Facial Hidratante Ácido Hialurônico', cat: 'Cosméticos', ncm: '33049990', cst: '000', cClassTrib: '000001', preco: 12.99 },
+      { sku: 'DAI-4901005', desc: 'Biscoito Palito Pocky Chocolate 47g', cat: 'Alimentos', ncm: '19053100', cst: '000', cClassTrib: '999999', preco: 14.99 },
+      { sku: 'DAI-4550482', desc: 'Sabonete Líquido Neutro Refil 250ml', cat: 'Higiene', ncm: '34013000', cst: '000', cClassTrib: '200030', preco: 12.99 },
+      { sku: 'DAI-4549139', desc: 'Organizador Acrílico Maquiagem 3 Gavetas', cat: 'Organização', ncm: '39269090', cst: '000', cClassTrib: '000001', preco: 29.99 },
+      { sku: 'DAI-4901555', desc: 'Chá Verde Matcha Tradicional 50g', cat: 'Alimentos', ncm: '09021000', cst: '200', cClassTrib: '200030', preco: 19.99 },
+      { sku: 'DAI-4549999', desc: 'Tesoura Inox Escritório Ponta Arredondada', cat: 'Papelaria', ncm: '8213000', cst: '000', cClassTrib: '000001', preco: 12.99 },
+    ];
+
+    let appState = {
+      apiConfig: {
+        baseUrl: 'http://localhost:8080/api/calculadora',
+        mode: 'AUTO',
+        releaseHash: 'v1.7.2-offline | sha256: homologacao-daiso-2026-11',
+      },
+      apiOnline: false,
+      skus: [],
+      auditHistory: [],
+      currentAudit: null,
+      currentBatch: null,
+    };
+
+    // Variável auxiliar segura para cópia de conteúdo dentro de modais
+    let modalCopyBuffer = '';
+
+    /*************************************************************************
+     * 2. FUNÇÕES UTILITÁRIAS (ARREDONDAMENTO ADR003 HALF_EVEN, FORMATADORES)
+     *************************************************************************/
+
+    /**
+     * Implementa arredondamento bancário HALF_EVEN conforme ADR003 da RFB
+     * (BigDecimal com precisão intermediária de 8 casas).
+     */
+    function roundHalfEven(num, decimals = 2) {
+      if (!Number.isFinite(num)) return 0;
+      const factor = Math.pow(10, decimals);
+      const scaled = num * factor;
+      const floored = Math.floor(scaled);
+      const diff = scaled - floored;
+      const epsilon = 1e-10;
+
+      if (Math.abs(diff - 0.5) < epsilon) {
+        return (floored % 2 === 0 ? floored : floored + 1) / factor;
+      }
+      return Math.round(scaled) / factor;
+    }
+
+    function fmtBRL(value) {
+      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+    }
+
+    function fmtPct(value) {
+      return `${(value * 100).toFixed(2).replace('.', ',')}%`;
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /**
+     * Exibe notificação Toast estilizada (nunca usa alert).
+     */
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const colors = {
+        success: 'bg-emerald-600 text-white border-emerald-500',
+        error: 'bg-rose-600 text-white border-rose-500',
+        warning: 'bg-amber-500 text-slate-950 border-amber-400',
+        info: 'bg-slate-900 text-white border-slate-700',
+      };
+      const toast = document.createElement('div');
+      toast.className = `pointer-events-auto px-4 py-3 rounded-xl shadow-lg border text-xs sm:text-sm font-medium flex items-center justify-between gap-3 transition-all duration-300 ${colors[type] || colors.info}`;
+      toast.innerHTML = `<span>${escapeHtml(message)}</span><button onclick="this.parentElement.remove()" class="opacity-75 hover:opacity-100 font-bold ml-2">&times;</button>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-x-4');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    /**
+     * Cópia segura para área de transferência (compatível com iframes).
+     */
+    function copyText(text) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        showToast('Copiado para a área de transferência!', 'success');
+      } catch (err) {
+        showToast('Não foi possível copiar automaticamente.', 'error');
+      }
+    }
+
+    function copyTextFromId(elementId) {
+      const el = document.getElementById(elementId);
+      if (el) copyText(el.textContent || el.value || '');
+    }
+
+    function downloadTextFile(filename, content, mimeType = 'text/plain;charset=utf-8') {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast(`Arquivo ${filename} baixado com sucesso!`, 'success');
+    }
+
+    /*************************************************************************
+     * 3. NAVEGAÇÃO E CONTROLE DE INTERFACE
+     *************************************************************************/
+    const TAB_META = {
+      dashboard: { title: 'Dashboard Executivo', sub: 'Monitoramento CBS, IBS e Imposto Seletivo — Regime Regular (Portaria Cotec nº 342/2026)' },
+      auditor: { title: 'Auditor XML em Lote (NF-e / NFC-e)', sub: 'Validação em massa (.xml, pastas e .zip) via /observabilidade/regime-geral' },
+      skus: { title: 'Saneamento de SKUs & NCM', sub: 'Higienização cadastral de NCM, CST e cClassTrib antes da emissão no ERP/PDV' },
+      simulador: { title: 'Simulador de Precificação & Transição', sub: 'Comparativo de margens Daiso Brasil (Legado vs. Reforma Tributária 2026–2033)' },
+      api: { title: 'API Oficial RFB & Governança', sub: 'Integração com ReceitaFederal/calculadora-rtc-regime-regular e Playground JSON' },
+      github: { title: 'Publicar no GitHub', sub: 'Exporte index.html, README.md, docker-compose.yml e licença MIT prontos para uso' },
+    };
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-section').forEach(el => el.classList.add('hidden'));
+      const target = document.getElementById(`tab-${tabId}`);
+      if (target) target.classList.remove('hidden');
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-daiso-600', 'text-white', 'shadow-md', 'shadow-daiso-600/20');
+        btn.classList.add('text-slate-300', 'hover:bg-slate-800', 'hover:text-white');
+      });
+      const activeBtn = document.getElementById(`nav-${tabId}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-300', 'hover:bg-slate-800', 'hover:text-white');
+        activeBtn.classList.add('bg-daiso-600', 'text-white', 'shadow-md', 'shadow-daiso-600/20');
+      }
+
+      if (TAB_META[tabId]) {
+        document.getElementById('page-title').textContent = TAB_META[tabId].title;
+        document.getElementById('page-subtitle').textContent = TAB_META[tabId].sub;
+      }
+
+      toggleMobileSidebar(false);
+    }
+
+    function toggleMobileSidebar(open) {
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('mobile-backdrop');
+      if (open) {
+        sidebar.classList.remove('-translate-x-full');
+        backdrop.classList.remove('hidden');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+        backdrop.classList.add('hidden');
+      }
+    }
+
+    function openModal(title, subtitle, htmlContent) {
+      document.getElementById('modal-title').textContent = title;
+      document.getElementById('modal-subtitle').textContent = subtitle;
+      document.getElementById('modal-body').innerHTML = htmlContent;
+      document.getElementById('modal-backdrop').classList.remove('hidden');
+    }
+
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.add('hidden');
+    }
+
+    /*************************************************************************
+     * 4. MOTOR TRIBUTÁRIO (CONEXÃO API OFICIAL RFB + FALLBACK LOCAL ADR003)
+     *************************************************************************/
+
+    async function testApiConnection() {
+      const url = appState.apiConfig.baseUrl.replace(/\/+$/, '');
+      const dotEl = document.getElementById('sidebar-engine-dot');
+      dotEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-blue-400 animate-ping"></span> Testando...`;
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const resp = await fetch(`${url}/dados-abertos/aliquota-uniao`, { method: 'GET', signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (resp.ok) {
+          appState.apiOnline = true;
+          updateEngineBadge();
+          showToast('Conectado à API oficial da Receita Federal!', 'success');
+          return true;
+        }
+        throw new Error(`HTTP ${resp.status}`);
+      } catch (err) {
+        appState.apiOnline = false;
+        updateEngineBadge();
+        showToast('API RFB não detectada localmente. Operando com Motor Local ADR003 (HALF_EVEN).', 'warning');
+        return false;
+      }
+    }
+
+    function updateEngineBadge() {
+      const dotEl = document.getElementById('sidebar-engine-dot');
+      document.getElementById('sidebar-engine-url').textContent = appState.apiConfig.baseUrl;
+
+      if (appState.apiOnline && appState.apiConfig.mode !== 'OFFLINE') {
+        dotEl.className = 'inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400';
+        dotEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-400"></span> API RFB Online`;
+      } else {
+        dotEl.className = 'inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400';
+        dotEl.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-400"></span> Offline (ADR003)`;
+      }
+    }
+
+    /**
+     * Executa o cálculo de um lote de itens (via API oficial ou Motor Local ADR003).
+     * Segue o contrato de observabilidade: HTTP 200 com estadoItem por item.
+     */
+    async function calculateObservabilidade(payload, year = 2033) {
+      const useApi = (appState.apiConfig.mode === 'API_ONLY') || (appState.apiConfig.mode === 'AUTO' && appState.apiOnline);
+
+      if (useApi) {
+        try {
+          const baseUrl = appState.apiConfig.baseUrl.replace(/\/+$/, '');
+          const resp = await fetch(`${baseUrl}/observabilidade/regime-geral`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (resp.ok) {
+            const data = await resp.json();
+            return { engine: 'API Oficial RFB', raw: data, items: normalizeApiResponse(payload, data) };
+          }
+        } catch (err) {
+          if (appState.apiConfig.mode === 'API_ONLY') {
+            showToast('Falha ao conectar na API oficial (modo API_ONLY ativo).', 'error');
+            throw err;
+          }
+        }
+      }
+
+      // Motor Local Offline (emula fielmente POST /observabilidade/regime-geral + ADR003)
+      const rates = TRANSITION_RATES[year] || TRANSITION_RATES[2033];
+      const evaluatedItems = payload.itens.map((item, idx) => {
+        const errors = [];
+        const ncmClean = String(item.ncm || '').replace(/\D/g, '');
+        if (ncmClean.length !== 8) {
+          errors.push({
+            code: 'REG-011',
+            title: 'NCM inválido ou incompleto',
+            pointer: `#/itens/${idx}/ncm`,
+            detail: `O código NCM "${item.ncm}" deve conter exatamente 8 dígitos numéricos conforme tabela oficial TIPI/RFB.`,
+          });
+        }
+
+        const rule = CCLASS_RULES[item.cClassTrib];
+        if (!rule) {
+          errors.push({
+            code: 'REG-024',
+            title: 'cClassTrib não localizado na tabela vigente',
+            pointer: `#/itens/${idx}/cClassTrib`,
+            detail: `O código cClassTrib "${item.cClassTrib}" não possui enquadramento válido na LC 214/2025. Revise o cadastro do SKU.`,
+          });
+        }
+
+        if (item.baseCalculo <= 0 || isNaN(item.baseCalculo)) {
+          errors.push({
+            code: 'REG-005',
+            title: 'Base de cálculo unificada inválida',
+            pointer: `#/itens/${idx}/baseCalculo`,
+            detail: 'A base de cálculo deve ser estritamente maior que zero.',
+          });
+        }
+
+        if (errors.length > 0) {
+          return {
+            ...item,
+            estadoItem: 'INCONSISTENCIA_ENTRADA',
+            vCBS: 0,
+            vIBSUF: 0,
+            vIBSMun: 0,
+            vIS: 0,
+            aliqCBS: 0,
+            aliqIBS: 0,
+            aliqIS: 0,
+            errors,
+            memoriaCalculo: `Cálculo bloqueado por inconsistência cadastral no item #${item.numero}. Corrija os ponteiros indicados antes da autorização na SEFAZ.`,
+            fundamentacao: 'Portaria Cotec nº 342/2026 — Regra de Observabilidade de Entrada.',
+          };
+        }
+
+        // Cálculo com precisão intermediária de 8 casas e arredondamento HALF_EVEN (ADR003)
+        const fatorReducao = 1 - rule.reducao;
+        const aliqCBS = roundHalfEven(rates.cbs * fatorReducao, 8);
+        const aliqIBSUF = roundHalfEven(rates.ibsUf * fatorReducao, 8);
+        const aliqIBSMun = roundHalfEven(rates.ibsMun * fatorReducao, 8);
+        const aliqIS = year >= 2027 ? rule.isRate : 0;
+
+        const vCBS = roundHalfEven(item.baseCalculo * aliqCBS, 2);
+        const vIBSUF = roundHalfEven(item.baseCalculo * aliqIBSUF, 2);
+        const vIBSMun = roundHalfEven(item.baseCalculo * aliqIBSMun, 2);
+        const vIS = roundHalfEven(item.baseCalculo * aliqIS, 2);
+
+        const alertaDivergencia = item.cst !== rule.cstEsperado;
+        if (alertaDivergencia) {
+          errors.push({
+            code: 'CST-002',
+            title: 'Divergência entre CST informado e cClassTrib',
+            pointer: `#/itens/${idx}/cst`,
+            detail: `Para cClassTrib ${item.cClassTrib} (${rule.nome}), o CST esperado é "${rule.cstEsperado}", mas o XML trouxe "${item.cst}".`,
+          });
+        }
+
+        const memoria = [
+          `[BASE UNIFICADA] R$ ${item.baseCalculo.toFixed(2)} (vProd + vFrete + vOutro - vDesc)`,
+          `[ENQUADRAMENTO] cClassTrib ${item.cClassTrib} — ${rule.nome} (Redução: ${(rule.reducao * 100).toFixed(0)}%)`,
+          `[CBS - UNIÃO] ${item.baseCalculo.toFixed(2)} × ${(aliqCBS * 100).toFixed(4)}% = R$ ${vCBS.toFixed(2)} (HALF_EVEN)`,
+          `[IBS - UF ${payload.ufDestino}] ${item.baseCalculo.toFixed(2)} × ${(aliqIBSUF * 100).toFixed(4)}% = R$ ${vIBSUF.toFixed(2)} (HALF_EVEN)`,
+          `[IBS - MUN] ${item.baseCalculo.toFixed(2)} × ${(aliqIBSMun * 100).toFixed(4)}% = R$ ${vIBSMun.toFixed(2)} (HALF_EVEN)`,
+          aliqIS > 0 ? `[IMPOSTO SELETIVO] ${item.baseCalculo.toFixed(2)} × ${(aliqIS * 100).toFixed(2)}% = R$ ${vIS.toFixed(2)}` : `[IMPOSTO SELETIVO] Não incidente`,
+        ].join('\n');
+
+        return {
+          ...item,
+          estadoItem: alertaDivergencia ? 'CALCULO_SIMULADO' : 'CALCULADO',
+          vCBS,
+          vIBSUF,
+          vIBSMun,
+          vIS,
+          aliqCBS,
+          aliqIBS: aliqIBSUF + aliqIBSMun,
+          aliqIS,
+          errors,
+          memoriaCalculo: memoria,
+          fundamentacao: rule.lei,
+        };
+      });
+
+      return {
+        engine: `Motor Local ADR003 (${year})`,
+        raw: { statusHttp: 200, anoReferencia: year, ufDestino: payload.ufDestino, itens: evaluatedItems },
+        items: evaluatedItems,
+      };
+    }
+
+    function normalizeApiResponse(payload, apiData) {
+      const list = apiData.itens || apiData.objetos || [];
+      return payload.itens.map((orig, i) => {
+        const res = list[i] || {};
+        return {
+          ...orig,
+          estadoItem: res.estadoItem || 'CALCULADO',
+          vCBS: Number(res.tributos?.cbs?.valor ?? res.vCBS ?? 0),
+          vIBSUF: Number(res.tributos?.ibsUf?.valor ?? res.vIBSUF ?? 0),
+          vIBSMun: Number(res.tributos?.ibsMun?.valor ?? res.vIBSMun ?? 0),
+          vIS: Number(res.tributos?.is?.valor ?? res.vIS ?? 0),
+          aliqCBS: Number(res.tributos?.cbs?.aliquota ?? 0),
+          aliqIBS: Number((res.tributos?.ibsUf?.aliquota ?? 0) + (res.tributos?.ibsMun?.aliquota ?? 0)),
+          aliqIS: Number(res.tributos?.is?.aliquota ?? 0),
+          errors: res.erros || [],
+          memoriaCalculo: res.memoriaCalculo || JSON.stringify(res, null, 2),
+          fundamentacao: res.fundamentacaoLegal || 'Receita Federal — Motor Oficial RTC',
+        };
+      });
+    }
+
+    /*************************************************************************
+     * 5. PARSER REAL DE XML (NF-e / NFC-e) + PROCESSAMENTO EM LOTE E .ZIP
+     *************************************************************************/
+
+    function getXmlTagText(parent, tagName) {
+      if (!parent) return '';
+      const el = parent.getElementsByTagName(tagName)[0];
+      return el ? el.textContent.trim() : '';
+    }
+
+    function inferClassTribByNcm(ncm) {
+      const clean = String(ncm || '').replace(/\D/g, '');
+      if (clean.startsWith('2202')) return '000099';
+      if (clean.startsWith('1006')) return '200001';
+      if (clean.startsWith('3401') || clean.startsWith('0902')) return '200030';
+      return '000001';
+    }
+
+    function parseNfeXml(xmlString, fileName = 'documento.xml') {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlString, 'application/xml');
+      if (xmlDoc.getElementsByTagName('parsererror').length > 0) {
+        throw new Error('XML malformado ou inválido.');
+      }
+
+      const infNFe = xmlDoc.getElementsByTagName('infNFe')[0] || xmlDoc;
+      const ide = xmlDoc.getElementsByTagName('ide')[0];
+      const emit = xmlDoc.getElementsByTagName('emit')[0];
+      const dest = xmlDoc.getElementsByTagName('dest')[0];
+
+      const chNFe = (infNFe.getAttribute && infNFe.getAttribute('Id'))
+        ? infNFe.getAttribute('Id').replace(/^NFe/, '')
+        : (getXmlTagText(xmlDoc, 'chNFe') || `CHAVE-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+      const nNF = getXmlTagText(ide, 'nNF') || '000001';
+      const mod = getXmlTagText(ide, 'mod') || '55';
+      const natOp = getXmlTagText(ide, 'natOp') || 'Operação Comercial';
+      const emitNome = getXmlTagText(emit, 'xNome') || 'DAISO BRASIL COMERCIO E IMPORTACAO LTDA';
+      const ufEmit = getXmlTagText(emit, 'UF') || 'SP';
+      const ufDest = getXmlTagText(dest, 'UF') || ufEmit;
+
+      const detNodes = Array.from(xmlDoc.getElementsByTagName('det'));
+      if (detNodes.length === 0) {
+        throw new Error('Nenhum item (<det>) encontrado no XML informado.');
+      }
+
+      const itens = detNodes.map((det, idx) => {
+        const prod = det.getElementsByTagName('prod')[0];
+        const imposto = det.getElementsByTagName('imposto')[0];
+        const vProd = parseFloat(getXmlTagText(prod, 'vProd')) || 0;
+        const vFrete = parseFloat(getXmlTagText(prod, 'vFrete')) || 0;
+        const vOutro = parseFloat(getXmlTagText(prod, 'vOutro')) || 0;
+        const vDesc = parseFloat(getXmlTagText(prod, 'vDesc')) || 0;
+        const baseCalculo = roundHalfEven(vProd + vFrete + vOutro - vDesc, 2);
+
+        const cProd = getXmlTagText(prod, 'cProd') || `ITEM-${idx + 1}`;
+        const ncm = getXmlTagText(prod, 'NCM') || '';
+
+        let cst = getXmlTagText(imposto, 'CST_RTC') || getXmlTagText(imposto, 'CST') || '';
+        let cClassTrib = getXmlTagText(imposto, 'cClassTrib') || '';
+
+        const skuMatch = appState.skus.find(s => s.sku === cProd || s.ncm === ncm);
+        if (!cClassTrib) cClassTrib = skuMatch ? skuMatch.cClassTrib : inferClassTribByNcm(ncm);
+        if (!cst || cst.length !== 3) cst = skuMatch ? skuMatch.cst : (cClassTrib.startsWith('200') ? '200' : '000');
+
+        return {
+          numero: Number(det.getAttribute('nItem')) || (idx + 1),
+          sku: cProd,
+          descricao: getXmlTagText(prod, 'xProd') || 'Produto sem descrição',
+          ncm,
+          cfop: getXmlTagText(prod, 'CFOP') || '5102',
+          cst,
+          cClassTrib,
+          baseCalculo,
+        };
+      });
+
+      return {
+        id: 'AUD-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+        fileName,
+        timestamp: new Date().toLocaleString('pt-BR'),
+        modelo: mod === '65' ? 'NFC-e (65)' : 'NF-e (55)',
+        numero: nNF,
+        chave: chNFe,
+        natOp,
+        emitente: emitNome,
+        ufOrigem: ufEmit,
+        ufDestino: ufDest,
+        itens,
+      };
+    }
+
+    const DEMO_XML_SCENARIOS = {
+      importacao: {
+        fileName: 'NFe_482910_Importacao_CDSP.xml',
+        xml: `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc><NFe><infNFe Id="NFe35261114987685000116550010004829101928374650">
+  <ide><mod>55</mod><nNF>482910</nNF><natOp>IMPORTACAO DE MERCADORIAS P/ REVENDA</natOp></ide>
+  <emit><xNome>DAISO BRASIL COMERCIO E IMPORTACAO LTDA (CD GUARULHOS)</xNome><enderEmit><UF>SP</UF></enderEmit></emit>
+  <dest><enderDest><UF>SP</UF></enderDest></dest>
+  <det nItem="1"><prod><cProd>DAI-4550480</cProd><xProd>POTE HERMETICO ORGANIZADOR 1.2L</xProd><NCM>39241000</NCM><CFOP>3102</CFOP><vProd>4250.00</vProd><vFrete>320.00</vFrete></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+  <det nItem="2"><prod><cProd>DAI-4901777</cProd><xProd>REFRIGERANTE JAPONES RAMUNE 200ML (CX 30UN)</xProd><NCM>22021000</NCM><CFOP>3102</CFOP><vProd>3180.00</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000099</cClassTrib></imposto></det>
+  <det nItem="3"><prod><cProd>DAI-4902102</cProd><xProd>ARROZ JAPONES GRAO CURTO 1KG</xProd><NCM>10063021</NCM><CFOP>3102</CFOP><vProd>2900.00</vProd></prod><imposto><CST_RTC>200</CST_RTC><cClassTrib>200001</cClassTrib></imposto></det>
+  <det nItem="4"><prod><cProd>DAI-4901005</cProd><xProd>BISCOITO POCKY CHOCOLATE 47G (ERRO CCLASS)</xProd><NCM>19053100</NCM><CFOP>3102</CFOP><vProd>1890.50</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>999999</cClassTrib></imposto></det>
+  <det nItem="5"><prod><cProd>DAI-4549999</cProd><xProd>TESOURA INOX ESCRITORIO (ERRO NCM 7 DIGITOS)</xProd><NCM>8213000</NCM><CFOP>3102</CFOP><vProd>1120.00</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+</infNFe></NFe></nfeProc>`,
+      },
+      transferencia: {
+        fileName: 'NFe_194422_Transf_SP_RJ.xml',
+        xml: `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc><NFe><infNFe Id="NFe35261114987685000116550020001944221100998877">
+  <ide><mod>55</mod><nNF>194422</nNF><natOp>TRANSFERENCIA MERCADORIA CD SP -> FILIAL RJ</natOp></ide>
+  <emit><xNome>DAISO BRASIL - CD GUARULHOS/SP</xNome><enderEmit><UF>SP</UF></enderEmit></emit>
+  <dest><enderDest><UF>RJ</UF></enderDest></dest>
+  <det nItem="1"><prod><cProd>DAI-4979909</cProd><xProd>TIGELA CERAMICA RAMEN 600ML</xProd><NCM>69120000</NCM><CFOP>6152</CFOP><vProd>6400.00</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+  <det nItem="2"><prod><cProd>DAI-4550482</cProd><xProd>SABONETE LIQUIDO NEUTRO REFIL 250ML</xProd><NCM>34013000</NCM><CFOP>6152</CFOP><vProd>2450.00</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>200030</cClassTrib></imposto></det>
+  <det nItem="3"><prod><cProd>DAI-4549139</cProd><xProd>ORGANIZADOR ACRILICO MAQUIAGEM 3 GAVETAS</xProd><NCM>39269090</NCM><CFOP>6152</CFOP><vProd>5190.80</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+</infNFe></NFe></nfeProc>`,
+      },
+      nfce: {
+        fileName: 'NFCe_908123_PDV_Paulista.xml',
+        xml: `<?xml version="1.0" encoding="UTF-8"?>
+<nfeProc><NFe><infNFe Id="NFe35261114987685000469650120009081231445566778">
+  <ide><mod>65</mod><nNF>908123</nNF><natOp>VENDA CONSUMIDOR FINAL PDV - LOJA PAULISTA</natOp></ide>
+  <emit><xNome>DAISO BRASIL - FILIAL AV. PAULISTA/SP</xNome><enderEmit><UF>SP</UF></enderEmit></emit>
+  <dest><enderDest><UF>SP</UF></enderDest></dest>
+  <det nItem="1"><prod><cProd>DAI-4549131</cProd><xProd>CANETA GEL JAPONESA 0.5MM PRETA</xProd><NCM>96081000</NCM><CFOP>5102</CFOP><vProd>19.98</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+  <det nItem="2"><prod><cProd>DAI-4902102</cProd><xProd>ARROZ JAPONES GRAO CURTO 1KG</xProd><NCM>10063021</NCM><CFOP>5102</CFOP><vProd>19.99</vProd></prod><imposto><CST_RTC>200</CST_RTC><cClassTrib>200001</cClassTrib></imposto></det>
+  <det nItem="3"><prod><cProd>DAI-4901777</cProd><xProd>REFRIGERANTE RAMUNE ORIGINAL 200ML</xProd><NCM>22021000</NCM><CFOP>5102</CFOP><vProd>15.99</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000099</cClassTrib></imposto></det>
+  <det nItem="4"><prod><cProd>DAI-4549892</cProd><xProd>ESPONJA MAGICA MELAMINA KIT 8UN</xProd><NCM>39211390</NCM><CFOP>5102</CFOP><vProd>9.99</vProd></prod><imposto><CST_RTC>000</CST_RTC><cClassTrib>000001</cClassTrib></imposto></det>
+</infNFe></NFe></nfeProc>`,
+      },
+    };
+
+    /**
+     * Expande arquivos .xml e descompacta arquivos .zip localmente no navegador.
+     */
+    async function extractXmlEntriesFromFiles(fileList) {
+      const entries = [];
+      for (const file of fileList) {
+        const lower = file.name.toLowerCase();
+        if (lower.endsWith('.xml')) {
+          entries.push({ fileName: file.name, file });
+        } else if (lower.endsWith('.zip')) {
+          if (typeof JSZip === 'undefined') {
+            showToast('Biblioteca ZIP indisponível offline. Descompacte e selecione a pasta de XMLs.', 'warning');
+            continue;
+          }
+          try {
+            const zip = await JSZip.loadAsync(file);
+            const zipNames = Object.keys(zip.files).filter(n => !zip.files[n].dir && n.toLowerCase().endsWith('.xml'));
+            for (const zName of zipNames) {
+              const xmlText = await zip.files[zName].async('string');
+              entries.push({ fileName: `${file.name} :: ${zName.split('/').pop()}`, xml: xmlText });
+            }
+          } catch (err) {
+            showToast(`Erro ao descompactar "${file.name}": ${err.message}`, 'error');
+          }
+        }
+      }
+      return entries;
+    }
+
+    async function handleXmlFileSelect(event) {
+      const rawFiles = Array.from(event.target.files || []);
+      event.target.value = '';
+      const entries = await extractXmlEntriesFromFiles(rawFiles);
+      if (entries.length === 0) {
+        showToast('Nenhum arquivo .xml válido encontrado na seleção.', 'warning');
+        return;
+      }
+      await processXmlFilesBatch(entries);
+    }
+
+    async function handleXmlFolderSelect(event) {
+      const rawFiles = Array.from(event.target.files || []);
+      event.target.value = '';
+      const entries = await extractXmlEntriesFromFiles(rawFiles);
+      if (entries.length === 0) {
+        showToast('Nenhum arquivo .xml encontrado na pasta selecionada.', 'warning');
+        return;
+      }
+      await processXmlFilesBatch(entries);
+    }
+
+    /**
+     * Processa 1 ou N arquivos XML em lote sem travar a interface,
+     * consolidando resultados e falhas de leitura em um painel único.
+     */
+    async function processXmlFilesBatch(fileEntries) {
+      const year = Number(document.getElementById('audit-year-select').value) || 2033;
+      const total = fileEntries.length;
+      const progressWrap = document.getElementById('batch-progress-container');
+      const progressBar = document.getElementById('batch-progress-bar');
+      const progressLabel = document.getElementById('batch-progress-label');
+      const progressPct = document.getElementById('batch-progress-pct');
+
+      if (total > 1) {
+        progressWrap.classList.remove('hidden');
+        progressBar.style.width = '0%';
+      }
+
+      const auditedDocs = [];
+      const failedFiles = [];
+
+      for (let i = 0; i < total; i++) {
+        const entry = fileEntries[i];
+        const fileName = entry.fileName || entry.name || `xml_${i + 1}.xml`;
+
+        if (total > 1) {
+          const pct = Math.round(((i + 1) / total) * 100);
+          progressLabel.textContent = `Auditando ${i + 1} de ${total}: ${fileName}`;
+          progressPct.textContent = `${pct}%`;
+          progressBar.style.width = `${pct}%`;
+          if (i % 5 === 0) await new Promise(r => setTimeout(r, 0));
+        }
+
+        try {
+          const xmlText = entry.xml ? entry.xml : await entry.file.text();
+          const parsed = parseNfeXml(xmlText, fileName);
+          const audited = await computeAuditObject(parsed, year);
+          auditedDocs.push(audited);
+        } catch (err) {
+          failedFiles.push({ fileName, error: err.message || 'Erro desconhecido ao ler XML' });
+        }
+      }
+
+      setTimeout(() => progressWrap.classList.add('hidden'), 350);
+
+      if (auditedDocs.length === 0) {
+        showToast(`Nenhum XML pôde ser auditado (${failedFiles.length} erro(s)).`, 'error');
+        return;
+      }
+
+      // Atualiza histórico global mantendo os 30 documentos mais recentes
+      const newKeys = new Set(auditedDocs.map(d => `${d.chave}_${d.year}`));
+      appState.auditHistory = [
+        ...auditedDocs,
+        ...appState.auditHistory.filter(h => !newKeys.has(`${h.chave}_${h.year}`))
+      ].slice(0, 30);
+
+      if (total > 1 || failedFiles.length > 0) {
+        appState.currentBatch = {
+          id: 'LOTE-' + Date.now(),
+          createdAt: new Date().toLocaleString('pt-BR'),
+          year,
+          docs: auditedDocs,
+          failedFiles,
+          filter: 'ALL',
+        };
+        const firstWithError = auditedDocs.find(d => d.totals.errCount > 0) || auditedDocs[0];
+        appState.currentAudit = firstWithError;
+        renderBatchSummary();
+        renderCurrentAudit();
+        const errNotes = auditedDocs.filter(d => d.totals.errCount > 0).length;
+        showToast(`Lote concluído: ${auditedDocs.length} XML(s) auditado(s), ${errNotes} nota(s) com alerta!`, errNotes > 0 ? 'warning' : 'success');
+      } else {
+        appState.currentBatch = null;
+        document.getElementById('batch-summary-container').classList.add('hidden');
+        appState.currentAudit = auditedDocs[0];
+        renderCurrentAudit();
+        showToast(`XML "${auditedDocs[0].fileName}" auditado com sucesso!`, 'success');
+      }
+
+      saveState();
+      renderDashboard();
+    }
+
+    async function loadDemoBatch() {
+      const entries = [
+        DEMO_XML_SCENARIOS.importacao,
+        DEMO_XML_SCENARIOS.transferencia,
+        DEMO_XML_SCENARIOS.nfce,
+      ];
+      await processXmlFilesBatch(entries);
+    }
+
+    async function loadDemoScenario(type, silent = false) {
+      const scenario = DEMO_XML_SCENARIOS[type];
+      if (!scenario) return;
+      appState.currentBatch = null;
+      document.getElementById('batch-summary-container').classList.add('hidden');
+      const parsed = parseNfeXml(scenario.xml, scenario.fileName);
+      await runAuditOnDocument(parsed);
+      if (!silent) showToast(`Cenário "${parsed.natOp}" auditado!`, 'info');
+    }
+
+    async function computeAuditObject(parsedDoc, year) {
+      const payload = {
+        tipoDocumento: parsedDoc.modelo.includes('65') ? 'NFCE' : 'NFE',
+        ufOrigem: parsedDoc.ufOrigem,
+        ufDestino: parsedDoc.ufDestino,
+        itens: parsedDoc.itens,
+      };
+
+      const result = await calculateObservabilidade(payload, year);
+      const totals = result.items.reduce((acc, it) => {
+        if (it.estadoItem !== 'INCONSISTENCIA_ENTRADA') {
+          acc.base += it.baseCalculo;
+          acc.cbs += it.vCBS;
+          acc.ibs += (it.vIBSUF + it.vIBSMun);
+          acc.is += it.vIS;
+          acc.okCount += 1;
+        }
+        if (it.errors && it.errors.length > 0) acc.errCount += 1;
+        return acc;
+      }, { base: 0, cbs: 0, ibs: 0, is: 0, okCount: 0, errCount: 0 });
+
+      return {
+        ...parsedDoc,
+        year,
+        engine: result.engine,
+        items: result.items,
+        totals,
+        payload,
+      };
+    }
+
+    async function runAuditOnDocument(parsedDoc) {
+      const year = Number(document.getElementById('audit-year-select').value) || 2033;
+      appState.currentAudit = await computeAuditObject(parsedDoc, year);
+
+      appState.auditHistory = [
+        appState.currentAudit,
+        ...appState.auditHistory.filter(h => !(h.chave === parsedDoc.chave && h.year === year))
+      ].slice(0, 30);
+      saveState();
+
+      renderCurrentAudit();
+      renderDashboard();
+    }
+
+    async function recalculateCurrentAudit() {
+      const year = Number(document.getElementById('audit-year-select').value) || 2033;
+      if (appState.currentBatch && appState.currentBatch.docs.length > 0) {
+        const updatedDocs = [];
+        for (const doc of appState.currentBatch.docs) {
+          const baseDoc = { ...doc, itens: doc.payload.itens };
+          updatedDocs.push(await computeAuditObject(baseDoc, year));
+        }
+        appState.currentBatch.docs = updatedDocs;
+        appState.currentBatch.year = year;
+        const activeKey = appState.currentAudit?.chave;
+        appState.currentAudit = updatedDocs.find(d => d.chave === activeKey) || updatedDocs[0];
+        renderBatchSummary();
+        renderCurrentAudit();
+        renderDashboard();
+        showToast(`Lote recalculado para o ano-base ${year}.`, 'info');
+        return;
+      }
+
+      if (!appState.currentAudit) return;
+      const baseDoc = { ...appState.currentAudit, itens: appState.currentAudit.payload.itens };
+      await runAuditOnDocument(baseDoc);
+    }
+
+    function renderBatchSummary() {
+      const batch = appState.currentBatch;
+      const container = document.getElementById('batch-summary-container');
+      if (!batch || batch.docs.length === 0) {
+        container.classList.add('hidden');
+        return;
+      }
+      container.classList.remove('hidden');
+
+      const agg = batch.docs.reduce((acc, d) => {
+        acc.items += d.items.length;
+        acc.cbs += d.totals.cbs;
+        acc.ibs += d.totals.ibs;
+        acc.is += d.totals.is;
+        if (d.totals.errCount > 0) acc.errDocs += 1;
+        return acc;
+      }, { items: 0, cbs: 0, ibs: 0, is: 0, errDocs: 0 });
+
+      document.getElementById('batch-title').textContent = `${batch.docs.length} XML(s) Auditado(s) em Lote — Ano-Base ${batch.year}`;
+      document.getElementById('batch-subtitle').textContent = `Processado em ${batch.createdAt}. Clique em qualquer nota abaixo para inspecionar os itens e a memória de cálculo.`;
+
+      document.getElementById('batch-kpi-docs').textContent = batch.docs.length;
+      document.getElementById('batch-kpi-items').textContent = agg.items;
+      document.getElementById('batch-kpi-cbs').textContent = fmtBRL(agg.cbs);
+      document.getElementById('batch-kpi-ibs').textContent = fmtBRL(agg.ibs);
+      document.getElementById('batch-kpi-is').textContent = fmtBRL(agg.is);
+      document.getElementById('batch-kpi-err').textContent = `${agg.errDocs} / ${batch.docs.length}`;
+
+      const failedEl = document.getElementById('batch-failed-info');
+      if (batch.failedFiles.length > 0) {
+        failedEl.textContent = `Atenção: ${batch.failedFiles.length} arquivo(s) ignorado(s) por XML inválido.`;
+        failedEl.classList.remove('hidden');
+      } else {
+        failedEl.classList.add('hidden');
+      }
+
+      document.querySelectorAll('.batch-filter-btn').forEach(btn => {
+        btn.className = 'batch-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors';
+      });
+      const activeFilterBtn = document.getElementById(`batch-filter-${batch.filter}`);
+      if (activeFilterBtn) {
+        activeFilterBtn.className = 'batch-filter-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white transition-colors';
+      }
+
+      const filteredDocs = batch.docs.filter(d => {
+        if (batch.filter === 'ERRORS') return d.totals.errCount > 0;
+        if (batch.filter === 'OK') return d.totals.errCount === 0;
+        return true;
+      });
+
+      const tbody = document.getElementById('batch-docs-tbody');
+      tbody.innerHTML = filteredDocs.map(d => {
+        const isSelected = appState.currentAudit && appState.currentAudit.chave === d.chave;
+        const totalTrib = d.totals.cbs + d.totals.ibs + d.totals.is;
+        return `
+          <tr onclick="selectBatchDoc('${escapeHtml(d.chave)}')" class="cursor-pointer transition-colors ${isSelected ? 'bg-daiso-50/70' : 'hover:bg-slate-50'}">
+            <td class="px-4 py-2.5">
+              <div class="font-bold text-slate-900">${escapeHtml(d.modelo)} nº ${escapeHtml(d.numero)}</div>
+              <div class="text-[11px] font-mono text-slate-500 truncate max-w-[220px]">${escapeHtml(d.fileName)}</div>
+            </td>
+            <td class="px-3 py-2.5">
+              <div class="font-mono font-semibold text-slate-700">${escapeHtml(d.ufOrigem)} → ${escapeHtml(d.ufDestino)}</div>
+              <div class="text-[11px] text-slate-500 truncate max-w-[200px]">${escapeHtml(d.natOp)}</div>
+            </td>
+            <td class="px-3 py-2.5 text-center font-mono text-slate-700">${d.items.length}</td>
+            <td class="px-3 py-2.5 text-right font-mono text-slate-700">${fmtBRL(d.totals.base)}</td>
+            <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-900">${fmtBRL(totalTrib)}</td>
+            <td class="px-3 py-2.5 text-center">
+              ${d.totals.errCount > 0
+                ? `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">${d.totals.errCount} divergência(s)</span>`
+                : `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">100% OK</span>`}
+            </td>
+            <td class="px-4 py-2.5 text-right">
+              <span class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${isSelected ? 'bg-daiso-600 text-white' : 'bg-slate-100 text-slate-700'}">
+                ${isSelected ? 'Visualizando' : 'Inspecionar'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('') || `<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Nenhuma nota corresponde ao filtro selecionado.</td></tr>`;
+    }
+
+    function setBatchFilter(filter) {
+      if (!appState.currentBatch) return;
+      appState.currentBatch.filter = filter;
+      renderBatchSummary();
+    }
+
+    function selectBatchDoc(chave) {
+      if (!appState.currentBatch) return;
+      const found = appState.currentBatch.docs.find(d => d.chave === chave);
+      if (found) {
+        appState.currentAudit = found;
+        renderBatchSummary();
+        renderCurrentAudit();
+      }
+    }
+
+    function closeBatchSummary() {
+      appState.currentBatch = null;
+      document.getElementById('batch-summary-container').classList.add('hidden');
+    }
+
+    function exportBatchCsv(onlyDivergences = false) {
+      const batch = appState.currentBatch;
+      if (!batch || batch.docs.length === 0) return;
+
+      const header = ['Arquivo', 'Modelo', 'NumeroNF', 'Chave', 'UFOrigem', 'UFDestino', 'AnoBase', 'Item', 'SKU', 'Descricao', 'NCM', 'CFOP', 'CST', 'cClassTrib', 'BaseCalculo', 'vCBS', 'vIBSUF', 'vIBSMun', 'vIS', 'EstadoItem', 'Erros'];
+      const rows = [];
+
+      batch.docs.forEach(doc => {
+        doc.items.forEach(it => {
+          const hasIssue = it.estadoItem !== 'CALCULADO' || (it.errors && it.errors.length > 0);
+          if (onlyDivergences && !hasIssue) return;
+          rows.push([
+            `"${doc.fileName.replace(/"/g, '""')}"`, doc.modelo, doc.numero, `"${doc.chave}"`, doc.ufOrigem, doc.ufDestino, doc.year,
+            it.numero, it.sku, `"${it.descricao.replace(/"/g, '""')}"`, it.ncm, it.cfop, it.cst, it.cClassTrib,
+            it.baseCalculo.toFixed(2), it.vCBS.toFixed(2), it.vIBSUF.toFixed(2), it.vIBSMun.toFixed(2), it.vIS.toFixed(2),
+            it.estadoItem, `"${it.errors.map(e => `${e.code}: ${e.title}`).join(' | ')}"`
+          ]);
+        });
+      });
+
+      if (onlyDivergences && batch.failedFiles.length > 0) {
+        batch.failedFiles.forEach(f => {
+          rows.push([`"${f.fileName.replace(/"/g, '""')}"`, 'ERRO_XML', '-', '-', '-', '-', batch.year, '-', '-', '-', '-', '-', '-', '-', '0.00', '0.00', '0.00', '0.00', '0.00', 'ERRO_LEITURA', `"${f.error}"`]);
+        });
+      }
+
+      if (rows.length === 0) {
+        showToast('Nenhuma divergência encontrada neste lote para exportar!', 'success');
+        return;
+      }
+
+      const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      const suffix = onlyDivergences ? 'somente_divergencias' : 'consolidado_completo';
+      downloadTextFile(`lote_auditoria_rtc_${suffix}_${batch.year}.csv`, '\uFEFF' + csv, 'text/csv;charset=utf-8');
+    }
+
+    function renderCurrentAudit() {
+      const audit = appState.currentAudit;
+      if (!audit) return;
+
+      document.getElementById('audit-result-container').classList.remove('hidden');
+      document.getElementById('audit-doc-badge').textContent = audit.modelo;
+      document.getElementById('audit-doc-title').textContent = `Nº ${audit.numero} — ${audit.natOp}`;
+      document.getElementById('audit-doc-meta').textContent = `Chave: ${audit.chave} | Rota: ${audit.ufOrigem} → ${audit.ufDestino} | Emitente: ${audit.emitente}`;
+      document.getElementById('audit-engine-badge').textContent = audit.engine;
+
+      document.getElementById('sum-base').textContent = fmtBRL(audit.totals.base);
+      document.getElementById('sum-cbs').textContent = fmtBRL(audit.totals.cbs);
+      document.getElementById('sum-ibs').textContent = fmtBRL(audit.totals.ibs);
+      document.getElementById('sum-is').textContent = fmtBRL(audit.totals.is);
+      document.getElementById('sum-ok').textContent = `${audit.totals.okCount} / ${audit.items.length}`;
+      document.getElementById('sum-err').textContent = audit.totals.errCount;
+
+      const tbody = document.getElementById('audit-items-tbody');
+      tbody.innerHTML = audit.items.map((it, idx) => {
+        const statusMap = {
+          CALCULADO: '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">CALCULADO</span>',
+          CALCULO_SIMULADO: '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">ALERTA CST</span>',
+          INCONSISTENCIA_ENTRADA: '<span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[11px] font-bold">INCONSISTÊNCIA</span>',
+        };
+        const rowBg = it.estadoItem === 'INCONSISTENCIA_ENTRADA' ? 'bg-rose-50/40' : (it.estadoItem === 'CALCULO_SIMULADO' ? 'bg-amber-50/40' : '');
+
+        return `
+          <tr class="${rowBg} hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3 font-mono text-slate-500">${it.numero}</td>
+            <td class="px-4 py-3">
+              <div class="font-semibold text-slate-900">${escapeHtml(it.descricao)}</div>
+              <div class="text-[11px] font-mono text-slate-500">SKU: ${escapeHtml(it.sku)} • CFOP ${escapeHtml(it.cfop)}</div>
+            </td>
+            <td class="px-3 py-3 font-mono text-xs">
+              <div class="text-slate-800">NCM: ${escapeHtml(it.ncm)}</div>
+              <div class="text-[11px] text-slate-500">CST ${escapeHtml(it.cst)} • cClass ${escapeHtml(it.cClassTrib)}</div>
+            </td>
+            <td class="px-3 py-3 text-right font-mono font-medium text-slate-800">${fmtBRL(it.baseCalculo)}</td>
+            <td class="px-3 py-3 text-right font-mono text-blue-700">${fmtBRL(it.vCBS)}</td>
+            <td class="px-3 py-3 text-right font-mono text-indigo-700">${fmtBRL(it.vIBSUF + it.vIBSMun)}</td>
+            <td class="px-3 py-3 text-right font-mono ${it.vIS > 0 ? 'text-rose-700 font-bold' : 'text-slate-400'}">${fmtBRL(it.vIS)}</td>
+            <td class="px-3 py-3 text-center">${statusMap[it.estadoItem] || escapeHtml(it.estadoItem)}</td>
+            <td class="px-4 py-3 text-right">
+              <button onclick="openItemMemoryModal(${idx})" class="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-900 hover:text-white text-slate-700 text-xs font-semibold transition-colors">
+                Memória
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function openItemMemoryModal(idx) {
+      const it = appState.currentAudit?.items[idx];
+      if (!it) return;
+
+      const errorsHtml = it.errors.length > 0 ? `
+        <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200 space-y-2">
+          <div class="text-xs font-bold text-rose-800 uppercase">Erros / Alertas de Observabilidade (${it.errors.length})</div>
+          ${it.errors.map(e => `
+            <div class="text-xs text-rose-900 bg-white/80 p-2.5 rounded-lg border border-rose-100">
+              <div class="flex items-center justify-between font-mono font-bold">
+                <span>${escapeHtml(e.code)} — ${escapeHtml(e.title)}</span>
+                <span class="text-rose-600">${escapeHtml(e.pointer)}</span>
+              </div>
+              <p class="mt-1 text-rose-800">${escapeHtml(e.detail)}</p>
+            </div>
+          `).join('')}
+        </div>` : '';
+
+      const jsonDump = JSON.stringify({
+        numero: it.numero,
+        ncm: it.ncm,
+        cst: it.cst,
+        cClassTrib: it.cClassTrib,
+        estadoItem: it.estadoItem,
+        valores: { baseCalculo: it.baseCalculo, vCBS: it.vCBS, vIBSUF: it.vIBSUF, vIBSMun: it.vIBSMun, vIS: it.vIS },
+        erros: it.errors,
+      }, null, 2);
+
+      modalCopyBuffer = jsonDump;
+
+      const content = `
+        ${errorsHtml}
+        <div>
+          <span class="text-xs font-bold text-slate-500 uppercase">Memória de Cálculo (ADR003 — HALF_EVEN)</span>
+          <pre class="mt-1.5 p-3.5 rounded-xl bg-slate-900 text-emerald-300 font-mono text-xs whitespace-pre-wrap leading-relaxed">${escapeHtml(it.memoriaCalculo)}</pre>
+        </div>
+        <div class="p-3.5 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-900">
+          <strong class="block mb-0.5">Fundamentação Legal:</strong>
+          ${escapeHtml(it.fundamentacao)}
+        </div>
+        <div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-500 uppercase">JSON Estruturado (Compliance)</span>
+            <button onclick="copyText(modalCopyBuffer)" class="text-xs font-semibold text-daiso-600 hover:underline">Copiar JSON</button>
+          </div>
+          <pre class="mt-1.5 p-3 rounded-xl bg-slate-950 text-slate-300 font-mono text-[11px] overflow-x-auto">${escapeHtml(jsonDump)}</pre>
+        </div>
+      `;
+
+      openModal(`Item #${it.numero} — ${it.descricao}`, `SKU: ${it.sku} | NCM: ${it.ncm} | Estado: ${it.estadoItem}`, content);
+    }
+
+    function openXmlGroupModal() {
+      const audit = appState.currentAudit;
+      if (!audit) return;
+
+      const xmlSnippet = `<!-- Grupo <IBSCBS> gerado para conferência XSD (POST /xml/validate?tipo=nfe&subtipo=grupo) -->\n` +
+        audit.items.map(it => {
+          if (it.estadoItem === 'INCONSISTENCIA_ENTRADA') {
+            return `<!-- Item #${it.numero} (${it.sku}): BLOQUEADO por inconsistência (${it.errors.map(e => e.code).join(', ')}) -->`;
+          }
+          return `<det nItem="${it.numero}">
+  <imposto>
+    <IBSCBS>
+      <CST>${it.cst}</CST>
+      <cClassTrib>${it.cClassTrib}</cClassTrib>
+      <gIBSCBS>
+        <vBC>${it.baseCalculo.toFixed(2)}</vBC>
+        <gIBSUF><pIBSUF>${(it.aliqIBS * 65).toFixed(4)}</pIBSUF><vIBSUF>${it.vIBSUF.toFixed(2)}</vIBSUF></gIBSUF>
+        <gIBSMun><pIBSMun>${(it.aliqIBS * 35).toFixed(4)}</pIBSMun><vIBSMun>${it.vIBSMun.toFixed(2)}</vIBSMun></gIBSMun>
+        <gCBS><pCBS>${(it.aliqCBS * 100).toFixed(4)}</pCBS><vCBS>${it.vCBS.toFixed(2)}</vCBS></gCBS>
+      </gIBSCBS>
+    </IBSCBS>${it.vIS > 0 ? `\n    <IS><vBCIS>${it.baseCalculo.toFixed(2)}</vBCIS><pIS>${(it.aliqIS * 100).toFixed(2)}</pIS><vIS>${it.vIS.toFixed(2)}</vIS></IS>` : ''}
+  </imposto>
+</det>`;
+        }).join('\n');
+
+      modalCopyBuffer = xmlSnippet;
+
+      const html = `
+        <p class="text-xs text-slate-600">Prévia estrutural do grupo de tributação da Reforma Tributária para confrontar com o XML gerado pelo ERP da empresa.</p>
+        <div class="flex justify-end">
+          <button onclick="copyText(modalCopyBuffer)" class="px-3 py-1.5 rounded-lg bg-daiso-600 text-white text-xs font-semibold">Copiar XML</button>
+        </div>
+        <pre class="p-3.5 rounded-xl bg-slate-950 text-amber-200 font-mono text-[11px] overflow-x-auto leading-relaxed">${escapeHtml(xmlSnippet)}</pre>
+      `;
+      openModal(`Grupo XML <IBSCBS> — Nota ${audit.numero}`, `Ano-Base ${audit.year} | ${audit.modelo}`, html);
+    }
+
+    function exportAuditCsv() {
+      const audit = appState.currentAudit;
+      if (!audit) return;
+      const header = ['Item', 'SKU', 'Descricao', 'NCM', 'CFOP', 'CST', 'cClassTrib', 'BaseCalculo', 'vCBS', 'vIBSUF', 'vIBSMun', 'vIS', 'EstadoItem', 'Erros'];
+      const rows = audit.items.map(it => [
+        it.numero, it.sku, `"${it.descricao.replace(/"/g, '""')}"`, it.ncm, it.cfop, it.cst, it.cClassTrib,
+        it.baseCalculo.toFixed(2), it.vCBS.toFixed(2), it.vIBSUF.toFixed(2), it.vIBSMun.toFixed(2), it.vIS.toFixed(2),
+        it.estadoItem, `"${it.errors.map(e => `${e.code}: ${e.title}`).join(' | ')}"`
+      ]);
+      const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      downloadTextFile(`auditoria_rtc_nf_${audit.numero}.csv`, '\uFEFF' + csv, 'text/csv;charset=utf-8');
+    }
+
+    /*************************************************************************
+     * 6. SANEAMENTO DE SKUS & NCM
+     *************************************************************************/
+    function diagnoseSku(sku) {
+      const ncmClean = String(sku.ncm || '').replace(/\D/g, '');
+      const rule = CCLASS_RULES[sku.cClassTrib];
+      if (ncmClean.length !== 8) return { status: 'REVISAR', label: 'NCM Inválido', color: 'bg-rose-100 text-rose-800', ruleName: 'Corrigir 8 dígitos' };
+      if (!rule) return { status: 'REVISAR', label: 'cClassTrib Inválido', color: 'bg-rose-100 text-rose-800', ruleName: 'Tabela LC 214' };
+      if (sku.cst !== rule.cstEsperado) return { status: 'REVISAR', label: `CST Divergente (${rule.cstEsperado})`, color: 'bg-amber-100 text-amber-800', ruleName: rule.nome };
+      if (rule.isRate > 0) return { status: 'ALERTA_IS', label: 'Incide IS (+12%)', color: 'bg-purple-100 text-purple-800', ruleName: rule.nome };
+      return { status: 'OK', label: 'Conforme', color: 'bg-emerald-100 text-emerald-800', ruleName: rule.nome };
+    }
+
+    function renderSkuTable() {
+      const q = (document.getElementById('sku-search').value || '').toLowerCase();
+      const filter = document.getElementById('sku-filter-status').value;
+      const tbody = document.getElementById('sku-tbody');
+
+      let alertCount = 0;
+      const rows = appState.skus.map((s, idx) => {
+        const diag = diagnoseSku(s);
+        if (diag.status !== 'OK') alertCount++;
+        return { s, idx, diag };
+      });
+
+      document.getElementById('badge-skus-alert').textContent = alertCount;
+
+      const filtered = rows.filter(({ s, diag }) => {
+        const matchesQuery = !q || s.sku.toLowerCase().includes(q) || s.desc.toLowerCase().includes(q) || s.ncm.includes(q);
+        const matchesStatus = filter === 'ALL' || diag.status === filter;
+        return matchesQuery && matchesStatus;
+      });
+
+      tbody.innerHTML = filtered.map(({ s, idx, diag }) => `
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-4 py-3 font-mono font-semibold text-slate-900">${escapeHtml(s.sku)}</td>
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-900">${escapeHtml(s.desc)}</div>
+            <div class="text-[11px] text-slate-500">${escapeHtml(s.cat)} • PDV ${fmtBRL(s.preco)}</div>
+          </td>
+          <td class="px-3 py-3">
+            <input type="text" value="${escapeHtml(s.ncm)}" onchange="updateSkuField(${idx}, 'ncm', this.value)" class="w-24 px-2 py-1 rounded-lg border border-slate-200 font-mono text-xs focus:ring-2 focus:ring-daiso-500 focus:outline-none" />
+          </td>
+          <td class="px-3 py-3">
+            <select onchange="updateSkuField(${idx}, 'cst', this.value)" class="px-2 py-1 rounded-lg border border-slate-200 font-mono text-xs bg-white">
+              <option value="000" ${s.cst === '000' ? 'selected' : ''}>000</option>
+              <option value="200" ${s.cst === '200' ? 'selected' : ''}>200</option>
+              <option value="410" ${s.cst === '410' ? 'selected' : ''}>410</option>
+            </select>
+          </td>
+          <td class="px-3 py-3">
+            <select onchange="updateSkuField(${idx}, 'cClassTrib', this.value)" class="px-2 py-1 rounded-lg border border-slate-200 font-mono text-xs bg-white">
+              <option value="000001" ${s.cClassTrib === '000001' ? 'selected' : ''}>000001 (Integral)</option>
+              <option value="200001" ${s.cClassTrib === '200001' ? 'selected' : ''}>200001 (Cesta 0%)</option>
+              <option value="200030" ${s.cClassTrib === '200030' ? 'selected' : ''}>200030 (Red. 60%)</option>
+              <option value="000099" ${s.cClassTrib === '000099' ? 'selected' : ''}>000099 (Imp. Seletivo)</option>
+              ${!CCLASS_RULES[s.cClassTrib] ? `<option value="${escapeHtml(s.cClassTrib)}" selected>${escapeHtml(s.cClassTrib)} (Inválido)</option>` : ''}
+            </select>
+          </td>
+          <td class="px-3 py-3 text-xs text-slate-600">${escapeHtml(diag.ruleName)}</td>
+          <td class="px-3 py-3 text-center">
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${diag.color}">${escapeHtml(diag.label)}</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button onclick="deleteSku(${idx})" class="text-xs font-semibold text-slate-400 hover:text-rose-600">Remover</button>
+          </td>
+        </tr>
+      `).join('') || `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400 text-sm">Nenhum SKU encontrado para o filtro aplicado.</td></tr>`;
+
+      renderDashboard();
+    }
+
+    function updateSkuField(idx, field, val) {
+      appState.skus[idx][field] = val.trim();
+      saveState();
+      renderSkuTable();
+      showToast(`SKU ${appState.skus[idx].sku} atualizado.`, 'success');
+    }
+
+    function deleteSku(idx) {
+      const removed = appState.skus.splice(idx, 1)[0];
+      saveState();
+      renderSkuTable();
+      showToast(`SKU ${removed.sku} removido.`, 'info');
+    }
+
+    function validateAllSkus() {
+      const issues = appState.skus.filter(s => diagnoseSku(s).status === 'REVISAR').length;
+      if (issues === 0) {
+        showToast('100% da base de SKUs está conforme a LC 214/2025!', 'success');
+      } else {
+        showToast(`Encontrados ${issues} SKUs com inconsistência cadastral (NCM ou cClassTrib).`, 'warning');
+      }
+      renderSkuTable();
+    }
+
+    function autoFixDivergentCsts() {
+      let fixed = 0;
+      appState.skus.forEach(s => {
+        const rule = CCLASS_RULES[s.cClassTrib];
+        if (rule && s.cst !== rule.cstEsperado) {
+          s.cst = rule.cstEsperado;
+          fixed++;
+        }
+      });
+      if (fixed > 0) {
+        saveState();
+        renderSkuTable();
+        showToast(`${fixed} SKU(s) tiveram o CST alinhado em lote à regra do cClassTrib!`, 'success');
+      } else {
+        showToast('Nenhum CST divergente encontrado para correção automática.', 'info');
+      }
+    }
+
+    function openAddSkuModal() {
+      const html = `
+        <form onsubmit="submitNewSku(event)" class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div><label class="block text-xs font-semibold mb-1">Código SKU</label><input required id="new-sku-code" placeholder="DAI-4550999" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-xs" /></div>
+            <div><label class="block text-xs font-semibold mb-1">NCM (8 dígitos)</label><input required id="new-sku-ncm" placeholder="39241000" maxlength="8" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-xs" /></div>
+          </div>
+          <div><label class="block text-xs font-semibold mb-1">Descrição do Produto</label><input required id="new-sku-desc" placeholder="Ex.: Copo Térmico Inox 400ml" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs" /></div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="block text-xs font-semibold mb-1">Categoria</label><input id="new-sku-cat" value="Utilidades" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs" /></div>
+            <div><label class="block text-xs font-semibold mb-1">CST RTC</label><select id="new-sku-cst" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-xs bg-white"><option value="000">000</option><option value="200">200</option></select></div>
+            <div><label class="block text-xs font-semibold mb-1">cClassTrib</label><select id="new-sku-cclass" class="w-full px-3 py-2 rounded-xl border border-slate-200 font-mono text-xs bg-white"><option value="000001">000001</option><option value="200001">200001</option><option value="200030">200030</option><option value="000099">000099</option></select></div>
+          </div>
+          <div class="pt-2 flex justify-end">
+            <button type="submit" class="px-4 py-2 rounded-xl bg-daiso-600 text-white text-xs font-semibold">Adicionar à Matriz</button>
+          </div>
+        </form>
+      `;
+      openModal('Cadastrar Novo SKU na Matriz Fiscal', 'Validação automática de NCM e cClassTrib', html);
+    }
+
+    function submitNewSku(e) {
+      e.preventDefault();
+      appState.skus.unshift({
+        sku: document.getElementById('new-sku-code').value.trim(),
+        ncm: document.getElementById('new-sku-ncm').value.trim(),
+        desc: document.getElementById('new-sku-desc').value.trim(),
+        cat: document.getElementById('new-sku-cat').value.trim() || 'Geral',
+        cst: document.getElementById('new-sku-cst').value,
+        cClassTrib: document.getElementById('new-sku-cclass').value,
+        preco: 12.99,
+      });
+      saveState();
+      renderSkuTable();
+      closeModal();
+      showToast('Novo SKU incluído com sucesso!', 'success');
+    }
+
+    function importSkusCsv(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      file.text().then(text => {
+        const lines = text.split(/\r?\n/).filter(l => l.trim());
+        let added = 0;
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(/[;,]/).map(c => c.replace(/^"|"$/g, '').trim());
+          if (cols.length >= 3) {
+            appState.skus.unshift({
+              sku: cols[0] || `CSV-${i}`,
+              desc: cols[1] || 'Item importado',
+              ncm: cols[2] || '',
+              cst: cols[3] || '000',
+              cClassTrib: cols[4] || '000001',
+              preco: parseFloat((cols[5] || '12.99').replace(',', '.')) || 12.99,
+              cat: 'Importado CSV',
+            });
+            added++;
+          }
+        }
+        saveState();
+        renderSkuTable();
+        showToast(`${added} SKUs importados e validados!`, 'success');
+      }).catch(() => showToast('Erro ao processar arquivo CSV.', 'error'));
+      event.target.value = '';
+    }
+
+    function downloadSkuTemplate() {
+      const tpl = 'SKU;Descricao;NCM;CST;cClassTrib;PrecoVenda\nDAI-10001;Pote Acrilico 500ml;39241000;000;000001;12.99\nDAI-10002;Refrigerante Asiatico 330ml;22021000;000;000099;15.99';
+      downloadTextFile('modelo_skus_daiso_rtc.csv', '\uFEFF' + tpl, 'text/csv;charset=utf-8');
+    }
+
+    function exportSkusCsv() {
+      const header = ['SKU', 'Descricao', 'Categoria', 'NCM', 'CST', 'cClassTrib', 'Diagnostico'];
+      const rows = appState.skus.map(s => [s.sku, `"${s.desc.replace(/"/g, '""')}"`, s.cat, s.ncm, s.cst, s.cClassTrib, diagnoseSku(s).label]);
+      const csv = [header.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+      downloadTextFile('matriz_skus_saneada_rtc.csv', '\uFEFF' + csv, 'text/csv;charset=utf-8');
+    }
+
+    /*************************************************************************
+     * 7. SIMULADOR DE PRECIFICAÇÃO & TRANSIÇÃO (2026–2033)
+     *************************************************************************/
+    function setSimPrice(val) {
+      document.getElementById('sim-preco').value = val.toFixed(2);
+      runPricingSimulation();
+    }
+
+    function computeYearMargin(custo, preco, uf, ano, regimeItem, credLegadoPct, despPct) {
+      const icmsAliq = UF_ICMS[uf] || 0.18;
+      const pisCofinsAliq = 0.0925;
+      const despVal = preco * (despPct / 100);
+
+      const debLegado = roundHalfEven(preco * (icmsAliq + pisCofinsAliq), 2);
+      const credLegado = roundHalfEven(custo * (credLegadoPct / 100), 2);
+      const tribLiqLegado = Math.max(0, roundHalfEven(debLegado - credLegado, 2));
+      const lucroLegado = roundHalfEven(preco - custo - despVal - tribLiqLegado, 2);
+      const margemLegado = preco > 0 ? (lucroLegado / preco) : 0;
+
+      const tr = TRANSITION_RATES[ano] || TRANSITION_RATES[2033];
+      let reducao = 0;
+      let isAliq = 0;
+      if (regimeItem === 'REDUCAO_60') reducao = 0.6;
+      if (regimeItem === 'CESTA_ZERO') reducao = 1.0;
+      if (regimeItem === 'SELETIVO' && ano >= 2027) isAliq = 0.12;
+
+      const aliqIva = (tr.cbs + tr.ibsUf + tr.ibsMun) * (1 - reducao);
+      const aliqLegadoRestante = (icmsAliq * tr.icmsFactor) + (pisCofinsAliq * tr.pisCofinsFactor);
+
+      const precoSemIva = preco / (1 + aliqIva + isAliq);
+      const debIva = roundHalfEven(precoSemIva * (aliqIva + isAliq), 2);
+      const debLegadoRes = roundHalfEven(precoSemIva * aliqLegadoRestante, 2);
+      const debTotalRtc = roundHalfEven(debIva + debLegadoRes, 2);
+
+      const credIva = roundHalfEven(custo * aliqIva, 2);
+      const credLegRes = roundHalfEven(custo * ((credLegadoPct / 100) * ((tr.icmsFactor + tr.pisCofinsFactor) / 2)), 2);
+      const credTotalRtc = roundHalfEven(credIva + credLegRes, 2);
+
+      const tribLiqRtc = Math.max(0, roundHalfEven(debTotalRtc - credTotalRtc, 2));
+      const lucroRtc = roundHalfEven(preco - custo - despVal - tribLiqRtc, 2);
+      const margemRtc = preco > 0 ? (lucroRtc / preco) : 0;
+
+      return { debLegado, credLegado, tribLiqLegado, margemLegado, debTotalRtc, credTotalRtc, tribLiqRtc, margemRtc };
+    }
+
+    function runPricingSimulation() {
+      const custo = parseFloat(document.getElementById('sim-custo').value) || 0;
+      const preco = parseFloat(document.getElementById('sim-preco').value) || 0.01;
+      const uf = document.getElementById('sim-uf').value;
+      const ano = Number(document.getElementById('sim-ano').value);
+      const regimeItem = document.getElementById('sim-regime-item').value;
+      const credLegadoPct = parseFloat(document.getElementById('sim-cred-legado').value) || 0;
+      const despPct = parseFloat(document.getElementById('sim-despesas').value) || 0;
+
+      const res = computeYearMargin(custo, preco, uf, ano, regimeItem, credLegadoPct, despPct);
+
+      document.getElementById('res-rtc-title').textContent = `Reforma Tributária (${ano})`;
+      document.getElementById('res-leg-debito').textContent = fmtBRL(res.debLegado);
+      document.getElementById('res-leg-credito').textContent = `- ${fmtBRL(res.credLegado)}`;
+      document.getElementById('res-leg-liq').textContent = fmtBRL(res.tribLiqLegado);
+      document.getElementById('res-leg-margem').textContent = fmtPct(res.margemLegado);
+
+      document.getElementById('res-rtc-debito').textContent = fmtBRL(res.debTotalRtc);
+      document.getElementById('res-rtc-credito').textContent = `- ${fmtBRL(res.credTotalRtc)}`;
+      document.getElementById('res-rtc-liq').textContent = fmtBRL(res.tribLiqRtc);
+      document.getElementById('res-rtc-margem').textContent = fmtPct(res.margemRtc);
+
+      const diffPP = (res.margemRtc - res.margemLegado) * 100;
+      const verdictBox = document.getElementById('sim-verdict-box');
+      if (diffPP >= 0) {
+        verdictBox.className = 'rounded-2xl p-4 border bg-emerald-50 border-emerald-200 text-emerald-900 flex items-start gap-3';
+        verdictBox.innerHTML = `<span class="text-lg">📈</span><div class="text-xs leading-relaxed"><strong>Ganho de Margem (+${diffPP.toFixed(2)} p.p.):</strong> Em ${ano} (${uf}), a não cumulatividade plena e o cálculo por fora melhoram a margem líquida mantendo o preço de <strong>${fmtBRL(preco)}</strong>.</div>`;
+      } else {
+        const precoSugerido = roundHalfEven(preco * (1 + Math.abs(diffPP) / 100), 2);
+        verdictBox.className = 'rounded-2xl p-4 border bg-amber-50 border-amber-200 text-amber-900 flex items-start gap-3';
+        verdictBox.innerHTML = `<span class="text-lg">⚠️</span><div class="text-xs leading-relaxed"><strong>Compressão de Margem (${diffPP.toFixed(2)} p.p.):</strong> Em ${ano} (${uf}), o tributo líquido sobe ${fmtBRL(res.tribLiqRtc - res.tribLiqLegado)} por unidade. Para preservar a margem atual, o preço equivalente seria aprox. <strong>${fmtBRL(precoSugerido)}</strong>.</div>`;
+      }
+
+      const years = [2026, 2027, 2029, 2030, 2031, 2032, 2033];
+      const barsContainer = document.getElementById('transition-bars');
+      const series = years.map(y => ({ y, m: computeYearMargin(custo, preco, uf, y, regimeItem, credLegadoPct, despPct).margemRtc }));
+      const maxM = Math.max(0.35, ...series.map(s => Math.abs(s.m)));
+
+      barsContainer.innerHTML = series.map(s => {
+        const pctHeight = Math.max(12, Math.min(100, Math.round((Math.max(0, s.m) / maxM) * 100)));
+        const isSelected = s.y === ano;
+        return `
+          <div class="flex flex-col items-center h-full justify-end gap-1.5">
+            <span class="text-[10px] font-mono font-bold ${isSelected ? 'text-daiso-600' : 'text-slate-600'}">${(s.m * 100).toFixed(1)}%</span>
+            <div class="w-full max-w-[42px] rounded-t-lg transition-all duration-300 ${isSelected ? 'bg-daiso-600 shadow-md shadow-daiso-600/30' : 'bg-slate-800/80 hover:bg-slate-700'}" style="height: ${pctHeight}%"></div>
+            <span class="text-[11px] font-semibold ${isSelected ? 'text-daiso-700' : 'text-slate-500'}">${s.y}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /*************************************************************************
+     * 8. DASHBOARD, PLAYGROUND API E KIT GITHUB
+     *************************************************************************/
+    function renderDashboard() {
+      const totalNotas = appState.auditHistory.length;
+      const totalItens = appState.auditHistory.reduce((s, a) => s + a.items.length, 0);
+      const totalDiv = appState.auditHistory.reduce((s, a) => s + a.totals.errCount, 0);
+      const totalTrib = appState.auditHistory.reduce((s, a) => s + a.totals.cbs + a.totals.ibs + a.totals.is, 0);
+
+      document.getElementById('kpi-notas').textContent = totalNotas;
+      document.getElementById('kpi-itens-sub').textContent = `${totalItens} itens processados no motor`;
+      document.getElementById('kpi-divergencias').textContent = totalDiv;
+      document.getElementById('kpi-tributos').textContent = fmtBRL(totalTrib);
+
+      const badgeDiv = document.getElementById('badge-divergencias');
+      if (totalDiv > 0) {
+        badgeDiv.textContent = totalDiv;
+        badgeDiv.classList.remove('hidden');
+      } else {
+        badgeDiv.classList.add('hidden');
+      }
+
+      const skusOk = appState.skus.filter(s => diagnoseSku(s).status === 'OK').length;
+      const pctSku = appState.skus.length > 0 ? Math.round((skusOk / appState.skus.length) * 100) : 0;
+      document.getElementById('kpi-saude-sku').textContent = `${pctSku}%`;
+      document.getElementById('kpi-saude-sub').textContent = `${skusOk} de ${appState.skus.length} SKUs conformes`;
+
+      const histBody = document.getElementById('dashboard-history-body');
+      if (appState.auditHistory.length === 0) {
+        histBody.innerHTML = `<tr><td colspan="4" class="px-5 py-8 text-center text-xs text-slate-400">Nenhuma nota auditada ainda. Clique em <strong>"Auditar Lote Demo (3 XMLs)"</strong> acima para ver o motor em ação.</td></tr>`;
+      } else {
+        histBody.innerHTML = appState.auditHistory.slice(0, 6).map((h, i) => `
+          <tr onclick="openHistoryAudit(${i})" class="hover:bg-slate-50 cursor-pointer transition-colors">
+            <td class="px-5 py-3">
+              <div class="font-semibold text-slate-900 text-xs">${escapeHtml(h.modelo)} nº ${escapeHtml(h.numero)}</div>
+              <div class="text-[11px] text-slate-400 font-mono">${escapeHtml(h.timestamp)} • Ano ${h.year}</div>
+            </td>
+            <td class="px-4 py-3 text-xs">
+              <span class="font-mono font-semibold text-slate-700">${escapeHtml(h.ufOrigem)} → ${escapeHtml(h.ufDestino)}</span>
+              <div class="text-[11px] text-slate-500 truncate max-w-[180px]">${escapeHtml(h.natOp)}</div>
+            </td>
+            <td class="px-4 py-3 text-right font-mono text-xs font-bold text-slate-900">${fmtBRL(h.totals.cbs + h.totals.ibs + h.totals.is)}</td>
+            <td class="px-4 py-3 text-center">
+              ${h.totals.errCount > 0
+                ? `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-bold">${h.totals.errCount} erro(s)</span>`
+                : `<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">100% OK</span>`}
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function openHistoryAudit(idx) {
+      appState.currentAudit = appState.auditHistory[idx];
+      document.getElementById('audit-year-select').value = String(appState.currentAudit.year);
+      renderCurrentAudit();
+      switchTab('auditor');
+    }
+
+    function clearAuditHistory() {
+      appState.auditHistory = [];
+      saveState();
+      renderDashboard();
+      showToast('Histórico de auditorias limpo.', 'info');
+    }
+
+    function saveApiSettings() {
+      appState.apiConfig.baseUrl = document.getElementById('api-base-url').value.trim();
+      appState.apiConfig.mode = document.getElementById('api-mode').value;
+      appState.apiConfig.releaseHash = document.getElementById('api-release-hash').value.trim();
+      saveState();
+      updateEngineBadge();
+      showToast('Configurações de integração salvas!', 'success');
+    }
+
+    async function runPlaygroundTest() {
+      const outputEl = document.getElementById('playground-output');
+      try {
+        const payload = JSON.parse(document.getElementById('playground-input').value);
+        outputEl.textContent = 'Processando no motor...';
+        const res = await calculateObservabilidade(payload, 2033);
+        outputEl.textContent = JSON.stringify(res.raw, null, 2);
+        showToast(`Executado com sucesso via ${res.engine}`, 'success');
+      } catch (err) {
+        outputEl.textContent = `Erro: ${err.message}`;
+        showToast('JSON inválido ou erro de comunicação.', 'error');
+      }
+    }
+
+    function initGithubTemplates() {
+      const codeFence = String.fromCharCode(96, 96, 96);
+      const inlineTick = String.fromCharCode(96);
+
+      document.getElementById('gh-readme').textContent = [
+        '# Daiso Fiscal RTC — Cockpit de Auditoria e Simulação Tributária',
+        '',
+        'Sistema web open-source para **Analistas Fiscais Sêniores** operarem a transição da Reforma Tributária (CBS, IBS e Imposto Seletivo — LC nº 214/2025), integrado à API oficial da Receita Federal ([ReceitaFederal/calculadora-rtc-regime-regular](https://github.com/ReceitaFederal/calculadora-rtc-regime-regular)).',
+        '',
+        '## Funcionalidades',
+        `- **Auditor XML em Lote (NF-e / NFC-e):** Upload múltiplo de ${inlineTick}.xml${inlineTick}, seleção de pasta inteira ou arquivos ${inlineTick}.zip${inlineTick} com auditoria item a item via ${inlineTick}POST /observabilidade/regime-geral${inlineTick}.`,
+        `- **Exportação Consolidada:** Gera CSV completo do lote ou somente divergências para saneamento rápido no ERP.`,
+        `- **Memória de Cálculo & Compliance:** Armazena ${inlineTick}memoriaCalculo${inlineTick}, fundamentação legal e JSON Pointers de erro (${inlineTick}REG-011${inlineTick}, ${inlineTick}REG-024${inlineTick}, ${inlineTick}CST-002${inlineTick}).`,
+        `- **Saneamento de SKUs & NCM:** Importação CSV, edição inline, correção em lote de CST e detecção de Imposto Seletivo.`,
+        '- **Simulador de Precificação (2026–2033):** Compara carga tributária e margem líquida (Legado vs. IVA Dual por fora).',
+        `- **Precisão ADR003:** Motor local offline com arredondamento bancário ${inlineTick}HALF_EVEN${inlineTick}.`,
+        '',
+        '## Como publicar no GitHub Pages (30 segundos)',
+        `1. Suba o arquivo ${inlineTick}index.html${inlineTick} na raiz da branch ${inlineTick}main${inlineTick}.`,
+        `2. Acesse **Settings → Pages → Build and deployment → Branch: main**.`,
+        `3. Acesse sua URL ${inlineTick}https://seu-usuario.github.io/daiso-cockpit-fiscal-rtc/${inlineTick}.`,
+        '',
+        '## Como rodar conectado à API Oficial da Receita Federal (Docker)',
+        `${codeFence}bash`,
+        'git clone https://github.com/ReceitaFederal/calculadora-rtc-regime-regular.git',
+        'docker compose up -d',
+        codeFence,
+        `Depois acesse ${inlineTick}http://localhost:8088${inlineTick} e valide a conexão na aba **API RFB & Governança**.`,
+        '',
+        '## Licença',
+        'MIT License (compatível com a Portaria Cotec nº 342/2026).',
+      ].join('\n');
+
+      document.getElementById('gh-docker').textContent = `version: "3.9"
+
+services:
+  # 1. Motor Oficial da Receita Federal (Java 25 / Spring Boot 4)
+  calculadora-rfb:
+    build:
+      context: ./calculadora-rtc-regime-regular
+    container_name: rfb-calculadora-rtc
+    environment:
+      - SPRING_PROFILES_ACTIVE=offline
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  # 2. Cockpit Fiscal Daiso (Frontend)
+  cockpit-fiscal:
+    image: nginx:alpine
+    container_name: daiso-cockpit-fiscal
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    ports:
+      - "8088:80"
+    depends_on:
+      - calculadora-rfb
+    restart: unless-stopped`;
+    }
+
+    function downloadCurrentHtml() {
+      const fullDoc = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      downloadTextFile('index.html', fullDoc, 'text/html;charset=utf-8');
+    }
+
+    function downloadMitLicense() {
+      const year = new Date().getFullYear();
+      const mit = `MIT License\n\nCopyright (c) ${year} Cockpit Fiscal RTC\n\nPermission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.`;
+      downloadTextFile('LICENSE', mit);
+    }
+
+    /*************************************************************************
+     * 9. PERSISTÊNCIA LOCAL E INICIALIZAÇÃO
+     *************************************************************************/
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(appState.apiConfig));
+        localStorage.setItem(STORAGE_KEYS.SKUS, JSON.stringify(appState.skus));
+        localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(appState.auditHistory));
+      } catch (err) {
+        // Ignora silenciosamente se storage estiver bloqueado no iframe
+      }
+    }
+
+    function loadState() {
+      try {
+        const cfg = JSON.parse(localStorage.getItem(STORAGE_KEYS.CONFIG) || 'null');
+        if (cfg) appState.apiConfig = { ...appState.apiConfig, ...cfg };
+        const skus = JSON.parse(localStorage.getItem(STORAGE_KEYS.SKUS) || 'null');
+        appState.skus = (Array.isArray(skus) && skus.length > 0) ? skus : JSON.parse(JSON.stringify(DEFAULT_SKUS));
+        const hist = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || 'null');
+        appState.auditHistory = Array.isArray(hist) ? hist : [];
+      } catch (err) {
+        appState.skus = JSON.parse(JSON.stringify(DEFAULT_SKUS));
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      loadState();
+
+      document.getElementById('api-base-url').value = appState.apiConfig.baseUrl;
+      document.getElementById('api-mode').value = appState.apiConfig.mode;
+      document.getElementById('api-release-hash').value = appState.apiConfig.releaseHash;
+      updateEngineBadge();
+
+      document.getElementById('playground-input').value = JSON.stringify({
+        tipoDocumento: 'NFE',
+        ufOrigem: 'SP',
+        ufDestino: 'RJ',
+        itens: [
+          { numero: 1, sku: 'DAI-4550480', descricao: 'Pote Hermético 1.2L', ncm: '39241000', cst: '000', cClassTrib: '000001', baseCalculo: 1299.00 },
+          { numero: 2, sku: 'DAI-4901777', descricao: 'Refrigerante Ramune 200ml', ncm: '22021000', cst: '000', cClassTrib: '000099', baseCalculo: 450.00 },
+          { numero: 3, sku: 'DAI-ERRO', descricao: 'Item Teste Erro NCM', ncm: '821300', cst: '000', cClassTrib: '000001', baseCalculo: 200.00 }
+        ]
+      }, null, 2);
+
+      // Drag and drop em lote (.xml e .zip) no Auditor XML
+      const dz = document.getElementById('xml-dropzone');
+      dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-daiso-500', 'bg-daiso-50/40'); });
+      dz.addEventListener('dragleave', () => dz.classList.remove('border-daiso-500', 'bg-daiso-50/40'));
+      dz.addEventListener('drop', async e => {
+        e.preventDefault();
+        dz.classList.remove('border-daiso-500', 'bg-daiso-50/40');
+        const rawFiles = Array.from(e.dataTransfer?.files || []);
+        const entries = await extractXmlEntriesFromFiles(rawFiles);
+        if (entries.length === 0) {
+          showToast('Arraste arquivos no formato .xml ou .zip contendo XMLs.', 'warning');
+          return;
+        }
+        await processXmlFilesBatch(entries);
+      });
+
+      initGithubTemplates();
+      renderSkuTable();
+      runPricingSimulation();
+
+      // Carrega uma auditoria de demonstração automaticamente na primeira abertura
+      if (appState.auditHistory.length === 0) {
+        await loadDemoScenario('importacao', true);
+      } else {
+        appState.currentAudit = appState.auditHistory[0];
+        renderCurrentAudit();
+        renderDashboard();
+      }
+
+      switchTab('dashboard');
+    });
+  </script>
+</body>
+</html>
